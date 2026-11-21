@@ -1,15 +1,17 @@
-"""分塊超分推論。"""
+"""分塊超分推論（張量為主的管線，numpy 介面為相容層）。"""
 from __future__ import annotations
+
+import pathlib
 
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 
 def _to_tensor(img_bgr: np.ndarray, device: str, dtype: torch.dtype = torch.float32) -> torch.Tensor:
     rgb = np.ascontiguousarray(img_bgr[:, :, ::-1].transpose(2, 0, 1))
-    t = torch.from_numpy(rgb).to(device=device, dtype=dtype).div_(255.0).unsqueeze(0)
-    return t
+    return torch.from_numpy(rgb).to(device=device, dtype=dtype).div_(255.0).unsqueeze(0)
 
 
 def _to_numpy(t: torch.Tensor) -> np.ndarray:
@@ -24,39 +26,52 @@ def _dtype_of(model: torch.nn.Module) -> torch.dtype:
         return torch.float32
 
 
+def _scale_of(runner: torch.nn.Module, sample: torch.Tensor) -> int:
+    scale = getattr(runner, "upscale", 0)
+    if scale:
+        return int(scale)
+    with torch.no_grad():
+        return runner(sample[..., :8, :8]).shape[-1] // 8
+
+
+def tiled_tensor(runner: torch.nn.Module, t: torch.Tensor,
+                 tile: int, pad: int, scale: int = 0) -> torch.Tensor:
+    """t: (1,3,H,W)；回傳放大後張量。所有 patch 同尺寸，適合固定形狀的 TRT 引擎。"""
+    _, _, h, w = t.shape
+    if tile <= 0:
+        with torch.no_grad():
+            return runner(t)
+
+    scale = scale or _scale_of(runner, t)
+    rows = (h + tile - 1) // tile
+    cols = (w + tile - 1) // tile
+    canvas = F.pad(t, (pad, cols * tile + pad - w, pad, rows * tile + pad - h), mode="replicate")
+
+    out = torch.empty((1, 3, rows * tile * scale, cols * tile * scale),
+                      dtype=t.dtype, device=t.device)
+    patch = tile + 2 * pad
+    for r in range(rows):
+        for c in range(cols):
+            y, x = r * tile, c * tile
+            with torch.no_grad():
+                res = runner(canvas[..., y:y + patch, x:x + patch])
+            out[..., y * scale:(y + tile) * scale, x * scale:(x + tile) * scale] = \
+                res[..., pad * scale:(pad + tile) * scale, pad * scale:(pad + tile) * scale]
+    return out[..., :h * scale, :w * scale]
+
+
 def tiled_infer(model: torch.nn.Module, img_bgr: np.ndarray,
                 tile: int, pad: int, device: str = "cuda") -> np.ndarray:
-    h, w = img_bgr.shape[:2]
-    dtype = _dtype_of(model)
-    if tile <= 0 or (tile >= h and tile >= w):
-        with torch.no_grad():
-            return _to_numpy(model(_to_tensor(img_bgr, device, dtype)))
-
-    scale = getattr(model, "upscale", 0)
-    if not scale:
-        with torch.no_grad():
-            scale = model(_to_tensor(img_bgr[:8, :8], device, dtype)).shape[-1] // 8
-
-    out = np.zeros((h * scale, w * scale, 3), dtype=np.uint8)
-    for y0 in range(0, h, tile):
-        for x0 in range(0, w, tile):
-            y1, x1 = min(y0 + tile, h), min(x0 + tile, w)
-            py0, px0 = max(0, y0 - pad), max(0, x0 - pad)
-            py1, px1 = min(h, y1 + pad), min(w, x1 + pad)
-            patch = img_bgr[py0:py1, px0:px1]
-            with torch.no_grad():
-                res = _to_numpy(model(_to_tensor(patch, device, dtype)))
-            top, left = (y0 - py0) * scale, (x0 - px0) * scale
-            out[y0 * scale:y1 * scale, x0 * scale:x1 * scale] = \
-                res[top:top + (y1 - y0) * scale, left:left + (x1 - x0) * scale]
-    return out
+    t = _to_tensor(img_bgr, device, _dtype_of(model))
+    return _to_numpy(tiled_tensor(model, t, tile, pad))
 
 
 class SuperResolver:
     def __init__(self, weights: str, upscale: int, tile: int,
                  tile_pad: int = 16, device: str = "cuda",
-                 dtype: torch.dtype | None = None):
+                 dtype: torch.dtype | None = None, use_trt: bool = True):
         from engine.arch_srvgg import load_srvgg
+        from engine import trt
 
         if dtype is None:
             dtype = torch.float16 if device == "cuda" else torch.float32
@@ -67,27 +82,44 @@ class SuperResolver:
         self.device = device
         self.dtype = dtype
 
+        self.trt = None
+        if use_trt and tile > 0 and device == "cuda":
+            patch = tile + 2 * tile_pad
+            sample = torch.zeros(1, 3, patch, patch, device=device, dtype=dtype)
+            key = f"srvgg_{pathlib.Path(weights).stem}_{patch}_fp16"
+            self.trt = trt.compile_fixed(self.model, [sample], key)
+
+    @property
+    def runner(self) -> torch.nn.Module:
+        return self.trt if self.trt is not None else self.model
+
+    def upscale_tensor(self, t: torch.Tensor, out_h: int, out_w: int) -> torch.Tensor:
+        big = tiled_tensor(self.runner, t, self.tile, self.pad, self.upscale)
+        if big.shape[-2:] == (out_h, out_w):
+            return big
+        return F.interpolate(big, size=(out_h, out_w), mode="area")
+
     def __call__(self, frame_bgr: np.ndarray) -> np.ndarray:
+        t = _to_tensor(frame_bgr, self.device, self.dtype)
         try:
-            return tiled_infer(self.model, frame_bgr, self.tile, self.pad, self.device)
+            big = tiled_tensor(self.runner, t, self.tile, self.pad, self.upscale)
         except torch.cuda.OutOfMemoryError:
             torch.cuda.empty_cache()
+            self.trt = None
             self.tile = max(128, self.tile // 2)
-            return tiled_infer(self.model, frame_bgr, self.tile, self.pad, self.device)
+            big = tiled_tensor(self.model, t, self.tile, self.pad, self.upscale)
+        return _to_numpy(big)
 
     def upscale_to(self, frame_bgr: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
-        """超分後直接在 GPU 降採到目標尺寸，避免搬 4 倍大的陣列回主記憶體。"""
-        big = self(frame_bgr)
-        if big.shape[:2] == (out_h, out_w):
-            return big
-        t = torch.from_numpy(np.ascontiguousarray(big[:, :, ::-1].transpose(2, 0, 1)))
-        t = t.to(device=self.device, dtype=torch.float32).unsqueeze(0)
-        small = torch.nn.functional.interpolate(t, size=(out_h, out_w), mode="area")
-        arr = small.squeeze(0).clamp_(0, 255).round_().to(torch.uint8).cpu().numpy()
-        return np.ascontiguousarray(arr.transpose(1, 2, 0)[:, :, ::-1])
+        t = _to_tensor(frame_bgr, self.device, self.dtype)
+        return _to_numpy(self.upscale_tensor(t, out_h, out_w))
 
     @staticmethod
     def resize_to(frame_bgr: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
         if frame_bgr.shape[:2] == (out_h, out_w):
             return frame_bgr
         return cv2.resize(frame_bgr, (out_w, out_h), interpolation=cv2.INTER_AREA)
+
+
+frame_to_tensor = _to_tensor
+tensor_to_frame = _to_numpy

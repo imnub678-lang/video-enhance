@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import pathlib
 
+import torch
+
 from engine.ffmpeg_pipe import Decoder, Encoder
 from engine.policy import TARGET_H, TARGET_W, decide
 from engine.presets import load
 from engine.probe import probe
 from engine.progress import emit
+from engine.sr import frame_to_tensor, tensor_to_frame
 from engine.timestamps import FramePlan, schedule
 
 
@@ -75,18 +78,19 @@ def run(input_path: str, output_path: str, preset: str,
                     frame = dec.read()
                     if frame is None:
                         break
+                    tensor = frame_to_tensor(frame, "cuda", torch.float16)
                     if sr is not None:
-                        frame = sr.upscale_to(frame, out_h, out_w)
-                    pending[next_src] = frame
-                    last_frame = frame
+                        tensor = sr.upscale_tensor(tensor, out_h, out_w)
+                    pending[next_src] = tensor
+                    last_frame = tensor
                     next_src += 1
 
             a = pending.get(fp.src_a, last_frame)
             b = pending.get(fp.src_b, a)
             if a is None:
                 break
-            out = interp.blend(a, b, fp.t) if (interp is not None and fp.t > 0) else a
-            enc.write(out)
+            out = interp.blend_tensors(a, b, fp.t) if (interp is not None and fp.t > 0) else a
+            enc.write(tensor_to_frame(out))
 
             for k in [k for k in pending if k < fp.src_a]:
                 del pending[k]
@@ -96,5 +100,10 @@ def run(input_path: str, output_path: str, preset: str,
                 else:
                     emit("fi" if interp else "sr", n, total)
     finally:
-        dec.close()
-        enc.close()
+        try:
+            enc.close()
+        finally:
+            try:
+                dec.close()
+            except RuntimeError:
+                pass

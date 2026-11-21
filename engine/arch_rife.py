@@ -96,7 +96,7 @@ class IFNet(nn.Module):
     def forward(self, img0: torch.Tensor, img1: torch.Tensor, timestep: float | torch.Tensor = 0.5):
         if not torch.is_tensor(timestep):
             timestep = (img0[:, :1] * 0 + 1) * timestep
-        else:
+        elif timestep.shape[-1] == 1 and timestep.shape[-2] == 1:
             timestep = timestep.repeat(1, 1, img0.shape[2], img0.shape[3])
 
         f0 = self.encode(img0)

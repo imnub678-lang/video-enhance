@@ -30,7 +30,9 @@ cd /d D:\video-enhance
 | 只補幀 | 不動解析度，只補到 60fps | 已是 4K 的素材 |
 | 只超分 | 只超分，不改幀率 | 素材已是 60fps |
 
-實測速度（RTX 5070 Ti Laptop）：7 秒 1080p24 素材跑完整超分＋補幀約 230 秒。10 秒約 5.5 分鐘，60 秒約 33 分鐘。
+實測速度（RTX 5070 Ti Laptop，TensorRT FP16）：7 秒 1080p24 素材跑完整超分＋補幀約 100 秒。10 秒約 2.4 分鐘，60 秒約 14 分鐘。
+
+首次執行會編譯 TensorRT 引擎（SR 約 9 秒、RIFE 4K 約 62 秒），之後引擎快取在 `models/trt_cache/`，載入只要 0.04 秒。不想用 TRT 可設環境變數 `VIDEOTOOL_NO_TRT=1`。
 
 ## 支援與不支援
 
@@ -82,3 +84,6 @@ tests/      單元與整合測試
 - 超分有殘差基底（`out += nearest_upsample(x)`），漏掉會輸出全黑
 - RIFE 走官方 v4.26 的 `IFNet_HDv3`（`engine/arch_rife.py`），`flownet.pkl` 的 key 帶 `module.` 前綴需剝除
 - 推論用 FP16，實測與 FP32 的像素差 0.04（滿分 255）
+- 管線全程走 GPU 張量，只在解碼後與編碼前各轉一次 numpy；早期版本每階段都轉，速度差 2.28 倍
+- TRT 引擎用固定形狀編譯（SR 800×800 patch、RIFE 2176×3840），所以所有 tile 都補到同尺寸
+- `tiled_tensor` 必須顯式傳入 `scale`，否則會對 TRT 引擎做 8×8 探測而觸發 shape guard 錯誤
