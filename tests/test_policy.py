@@ -21,8 +21,13 @@ def test_720p_upscales_with_x4():
     assert (p.do_sr, p.scale) == (True, 4)
 
 
-def test_over_1080p_rejected():
-    assert decide(mk(width=2560, height=1440), "balanced").reject_reason is not None
+def test_1440p_allowed():
+    p = decide(mk(width=2560, height=1440), "balanced")
+    assert p.reject_reason is None and p.do_sr is True
+
+
+def test_4k_input_rejected():
+    assert decide(mk(width=3840, height=2160), "balanced").reject_reason is not None
 
 
 def test_over_1080p_allowed_for_fi_only():
@@ -43,8 +48,8 @@ def test_hdr_rejected():
     assert decide(mk(is_hdr=True), "balanced").reject_reason is not None
 
 
-def test_ten_bit_rejected():
-    assert decide(mk(is_10bit=True, pix_fmt="yuv420p10le"), "balanced").reject_reason is not None
+def test_sdr_10bit_allowed():
+    assert decide(mk(is_10bit=True, pix_fmt="yuv420p10le"), "balanced").reject_reason is None
 
 
 def test_single_frame_rejected():

@@ -23,16 +23,16 @@ class Plan:
 
 
 def decide(info: VideoInfo, preset: str) -> Plan:
-    if info.is_hdr or info.is_10bit:
-        return _reject("HDR／10-bit 輸入不支援")
+    if info.is_hdr:
+        return _reject("HDR 輸入不支援（SDR 10-bit 可以）")
     if info.frame_count < 2:
         return _reject("素材幀數不足（少於 2 幀），無法補幀")
 
     do_sr = preset != "fi_only"
     do_fi = preset != "sr_only" and info.fps < TARGET_FPS
 
-    if do_sr and info.width * info.height > 1920 * 1080:
-        return _reject("解析度已高於 1080p，超分無意義；可改用「只補幀」預設")
+    if do_sr and info.width * info.height >= TARGET_W * TARGET_H:
+        return _reject("解析度已達 4K，超分無意義；可改用「只補幀」預設")
 
     scale = 4 if do_sr else 0
     tile = DEFAULT_TILE if do_sr else 0
