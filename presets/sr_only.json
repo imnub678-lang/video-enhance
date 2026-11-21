@@ -1,0 +1,1 @@
+{"label": "只超分", "do_sr": true, "do_fi": false, "model": "realesr-general-x4v3", "tile": 768, "encoder": "hevc_nvenc", "crf": 19}

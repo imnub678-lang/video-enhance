@@ -1,0 +1,1 @@
+{"label": "只補幀", "do_sr": false, "do_fi": true, "model": "realesr-general-x4v3", "tile": 0, "encoder": "hevc_nvenc", "crf": 19}
