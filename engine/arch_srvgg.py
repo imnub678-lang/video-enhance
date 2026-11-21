@@ -27,12 +27,22 @@ class SRVGGNetCompact(nn.Module):
         return out + base
 
 
+def _infer_layout(params: dict) -> tuple[int, int]:
+    """從權重推 num_conv 與 num_feat：body 結構為 conv,prelu,(conv,prelu)*n,conv。"""
+    last = max(int(k.split(".")[1]) for k in params if k.startswith("body."))
+    num_conv = (last + 1 - 3) // 2
+    num_feat = params["body.0.weight"].shape[0]
+    return num_conv, num_feat
+
+
 def load_srvgg(weights_path: str, upscale: int = 4,
-               num_conv: int = 32, num_feat: int = 64,
+               num_conv: int | None = None, num_feat: int | None = None,
                device: str = "cuda",
                dtype: torch.dtype = torch.float32) -> SRVGGNetCompact:
     state = torch.load(weights_path, map_location="cpu", weights_only=True)
     params = state.get("params_ema") or state.get("params") or state
-    model = SRVGGNetCompact(num_conv=num_conv, num_feat=num_feat, upscale=upscale)
+    auto_conv, auto_feat = _infer_layout(params)
+    model = SRVGGNetCompact(num_conv=num_conv or auto_conv,
+                            num_feat=num_feat or auto_feat, upscale=upscale)
     model.load_state_dict(params, strict=True)
     return model.eval().to(device=device, dtype=dtype)

@@ -14,8 +14,8 @@ def test_unknown_preset_returns_2(make_clip):
     assert main(["--input", src, "--preset", "nope"]) == 2
 
 
-def test_rejects_over_1080p(make_clip, tmp_path):
-    src = make_clip(width=2560, height=1440)
+def test_rejects_4k_input(make_clip, tmp_path):
+    src = make_clip(width=3840, height=2160, seconds=0.5)
     rc = main(["--input", src, "--output", str(tmp_path / "o.mp4"), "--preset", "balanced"])
     assert rc == 3
 

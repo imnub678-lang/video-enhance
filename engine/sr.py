@@ -97,6 +97,9 @@ class SuperResolver:
         big = tiled_tensor(self.runner, t, self.tile, self.pad, self.upscale)
         if big.shape[-2:] == (out_h, out_w):
             return big
+        h, w = big.shape[-2:]
+        if out_h * out_w > h * w:
+            return F.interpolate(big, size=(out_h, out_w), mode="bicubic", antialias=True)
         return F.interpolate(big, size=(out_h, out_w), mode="area")
 
     def __call__(self, frame_bgr: np.ndarray) -> np.ndarray:
@@ -118,7 +121,8 @@ class SuperResolver:
     def resize_to(frame_bgr: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
         if frame_bgr.shape[:2] == (out_h, out_w):
             return frame_bgr
-        return cv2.resize(frame_bgr, (out_w, out_h), interpolation=cv2.INTER_AREA)
+        interp = cv2.INTER_CUBIC if out_h * out_w > frame_bgr.shape[0] * frame_bgr.shape[1] else cv2.INTER_AREA
+        return cv2.resize(frame_bgr, (out_w, out_h), interpolation=interp)
 
 
 frame_to_tensor = _to_tensor

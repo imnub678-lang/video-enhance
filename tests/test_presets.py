@@ -24,5 +24,9 @@ def test_sr_only_disables_fi():
     assert load("sr_only").do_fi is False
 
 
-def test_all_five_present():
-    assert {p.name for p in all_presets()} == {"balanced", "quality", "fast", "fi_only", "sr_only"}
+def test_all_six_present():
+    assert {p.name for p in all_presets()} == {"balanced", "quality", "fast", "fi_only", "sr_only", "anime"}
+
+
+def test_anime_preset_uses_anime_model():
+    assert load("anime").model == "realesr-animevideov3"

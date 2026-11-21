@@ -11,11 +11,11 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-def test_window_builds_with_five_presets(app):
+def test_window_builds_with_six_presets(app):
     from app.ui.main_window import MainWindow
 
     w = MainWindow()
-    assert w.preset_combo.count() == 5
+    assert w.preset_combo.count() == 6
     assert w.btn_start.isEnabled() and not w.btn_stop.isEnabled()
 
 

@@ -1,0 +1,1 @@
+{"label": "動漫", "do_sr": true, "do_fi": true, "model": "realesr-animevideov3", "tile": 768, "encoder": "hevc_nvenc", "crf": 19}
