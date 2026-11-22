@@ -1,3 +1,5 @@
+import pytest
+
 from engine.probe import VideoInfo
 from engine.policy import decide
 
@@ -63,3 +65,38 @@ def test_sr_only_disables_interpolation():
 
 def test_all_sr_presets_use_768_tile():
     assert {decide(mk(), p).tile for p in ("balanced", "quality", "fast", "sr_only")} == {768}
+
+
+def test_model_choice_x2plus_uses_scale_2():
+    p = decide(mk(), "balanced", "x2plus")
+    assert (p.scale, p.tile, p.model) == (2, 384, "RealESRGAN_x2plus")
+
+
+def test_model_choice_x4plus_uses_scale_4():
+    p = decide(mk(), "balanced", "x4plus")
+    assert (p.scale, p.tile, p.model) == (4, 384, "RealESRGAN_x4plus")
+
+
+def test_model_choice_light_overrides_preset_model():
+    p = decide(mk(), "anime", "light")
+    assert (p.scale, p.model) == (4, "realesr-general-x4v3")
+
+
+def test_model_choice_anime_x4():
+    p = decide(mk(), "balanced", "anime-x4")
+    assert (p.scale, p.tile, p.model) == (4, 384, "RealESRGAN_x4plus_anime_6B")
+
+
+def test_auto_leaves_model_to_preset():
+    p = decide(mk(), "balanced")
+    assert (p.model, p.scale, p.tile) == ("", 4, 768)
+
+
+def test_unknown_model_choice_raises():
+    with pytest.raises(ValueError):
+        decide(mk(), "balanced", "x8plus")
+
+
+def test_fi_only_ignores_model_choice():
+    p = decide(mk(), "fi_only", "x4plus")
+    assert (p.do_sr, p.scale, p.tile) == (False, 0, 0)

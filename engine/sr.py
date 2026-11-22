@@ -69,13 +69,24 @@ def tiled_infer(model: torch.nn.Module, img_bgr: np.ndarray,
 class SuperResolver:
     def __init__(self, weights: str, upscale: int, tile: int,
                  tile_pad: int = 16, device: str = "cuda",
-                 dtype: torch.dtype | None = None, use_trt: bool = True):
-        from engine.arch_srvgg import load_srvgg
+                 dtype: torch.dtype | None = None, use_trt: bool = True,
+                 arch: str | None = None):
         from engine import trt
 
         if dtype is None:
             dtype = torch.float16 if device == "cuda" else torch.float32
-        self.model = load_srvgg(weights, upscale=upscale, device=device, dtype=dtype)
+        if arch is None:
+            stem = pathlib.Path(weights).stem
+            arch = "rrdb" if stem.startswith("RealESRGAN_") else "srvgg"
+        if arch == "rrdb":
+            from engine.arch_rrdb import load_rrdb
+
+            self.model = load_rrdb(weights, upscale=upscale, device=device, dtype=dtype)
+        else:
+            from engine.arch_srvgg import load_srvgg
+
+            self.model = load_srvgg(weights, upscale=upscale, device=device, dtype=dtype)
+        self.arch = arch
         self.upscale = upscale
         self.tile = tile
         self.pad = tile_pad
@@ -86,7 +97,7 @@ class SuperResolver:
         if use_trt and tile > 0 and device == "cuda":
             patch = tile + 2 * tile_pad
             sample = torch.zeros(1, 3, patch, patch, device=device, dtype=dtype)
-            key = f"srvgg_{pathlib.Path(weights).stem}_{patch}_fp16"
+            key = f"{arch}_{pathlib.Path(weights).stem}_{patch}_fp16"
             self.trt = trt.compile_fixed(self.model, [sample], key)
 
     @property
@@ -94,7 +105,14 @@ class SuperResolver:
         return self.trt if self.trt is not None else self.model
 
     def upscale_tensor(self, t: torch.Tensor, out_h: int, out_w: int) -> torch.Tensor:
-        big = tiled_tensor(self.runner, t, self.tile, self.pad, self.upscale)
+        try:
+            big = tiled_tensor(self.runner, t, self.tile, self.pad, self.upscale)
+        except torch.cuda.OutOfMemoryError:
+            # 強模型在 4K 輸出下可能吃爆顯存：丟掉固定形狀引擎、縮小分塊重來。
+            torch.cuda.empty_cache()
+            self.trt = None
+            self.tile = max(128, self.tile // 2)
+            big = tiled_tensor(self.model, t, self.tile, self.pad, self.upscale)
         if big.shape[-2:] == (out_h, out_w):
             return big
         h, w = big.shape[-2:]

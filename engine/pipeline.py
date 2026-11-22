@@ -25,9 +25,10 @@ def _decoded_size(width: int, height: int, rotation: int) -> tuple[int, int]:
 
 
 def run(input_path: str, output_path: str, preset: str,
-        models_dir: str = "models", on_progress=None) -> None:
+        models_dir: str = "models", on_progress=None,
+        model_choice: str = "auto") -> None:
     info = probe(input_path)
-    plan = decide(info, preset)
+    plan = decide(info, preset, model_choice)
     if plan.reject_reason:
         raise ValueError(plan.reject_reason)
 
@@ -53,7 +54,7 @@ def run(input_path: str, output_path: str, preset: str,
         from engine.models import ensure_model
         from engine.sr import SuperResolver
 
-        weights = ensure_model(p.model, models_dir)
+        weights = ensure_model(plan.model or p.model, models_dir)
         sr = SuperResolver(weights, plan.scale, plan.tile)
     if plan.do_fi:
         from engine.fi import Interpolator

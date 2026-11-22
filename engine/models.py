@@ -12,6 +12,21 @@ MODELS: dict[str, tuple[str, str | None, str]] = {
         "8dc7edb9ac80ccdc30c3a5dca6616509367f05fbc184ad95b731f05bece96292", "realesr-general-x4v3.pth"),
     "realesr-animevideov3": (f"{BASE}/realesr-animevideov3.pth",
         "b8a8376811077954d82ca3fcf476f1ac3da3e8a68a4f4d71363008000a18b75d", "realesr-animevideov3.pth"),
+    "RealESRGAN_x2plus": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
+        "49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb",
+        "RealESRGAN_x2plus.pth",
+    ),
+    "RealESRGAN_x4plus": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+        "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1",
+        "RealESRGAN_x4plus.pth",
+    ),
+    "RealESRGAN_x4plus_anime_6B": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+        "f872d837d3c90ed2e05227bed711af5671a6fd1c9f7d7e91c911a61f155e99da",
+        "RealESRGAN_x4plus_anime_6B.pth",
+    ),
     "rife426": (
         "https://huggingface.co/hzwer/RIFE/resolve/main/RIFEv4.26_0921.zip",
         "45c7f74156704769dc9f85cfcaf8552e1e926f9399dcfa3a553dee88fac6f53f",

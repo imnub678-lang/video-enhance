@@ -32,3 +32,31 @@ def test_rife_loads_and_blends():
     with torch.no_grad():
         out = m(a, a, 0.5)
     assert out.shape == a.shape
+
+
+def test_rrdb_output_shape_x2():
+    from engine.arch_rrdb import RRDBNet
+
+    m = RRDBNet(scale=2).eval()
+    with torch.no_grad():
+        out = m(torch.zeros(1, 3, 32, 32))
+    assert out.shape == (1, 3, 64, 64)
+
+
+def test_rrdb_output_shape_x4():
+    from engine.arch_rrdb import RRDBNet
+
+    m = RRDBNet(scale=4).eval()
+    with torch.no_grad():
+        out = m(torch.zeros(1, 3, 32, 32))
+    assert out.shape == (1, 3, 128, 128)
+
+
+def test_rrdb_official_weights_load_strict():
+    from engine.arch_rrdb import RRDBNet, load_rrdb
+
+    m2 = load_rrdb("models/RealESRGAN_x2plus.pth", 2, device="cpu")
+    m4 = load_rrdb("models/RealESRGAN_x4plus.pth", 4, device="cpu")
+    assert isinstance(m2, RRDBNet) and isinstance(m4, RRDBNet)
+    assert m2.conv_first.in_channels == 12  # pixel_unshuffle 展開 3 通道
+    assert m4.conv_first.in_channels == 3

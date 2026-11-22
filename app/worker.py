@@ -22,6 +22,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--input", required=True)
     ap.add_argument("--output")
     ap.add_argument("--preset", default="balanced")
+    ap.add_argument("--model", default="auto",
+                    choices=["auto", "light", "x2plus", "x4plus", "anime-x4"])
     ap.add_argument("--title")
     ap.add_argument("--subtitle")
     ap.add_argument("--models-dir", default="models")
@@ -55,14 +57,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"讀取素材資訊失敗：{exc}", file=sys.stderr)
         return 2
 
-    plan = decide(info, args.preset)
+    plan = decide(info, args.preset, args.model)
     if plan.reject_reason:
         print(f"拒絕處理：{plan.reject_reason}", file=sys.stderr)
         return 3
 
     emit("probe", info.frame_count, info.frame_count)
     try:
-        run(args.input, _resolve_output(args), args.preset, args.models_dir)
+        run(args.input, _resolve_output(args), args.preset, args.models_dir,
+            model_choice=args.model)
     except Exception:  # noqa: BLE001
         traceback.print_exc()
         return 1
