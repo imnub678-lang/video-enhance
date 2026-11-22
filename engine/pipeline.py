@@ -263,8 +263,10 @@ def _encode_segment(slice_plans: list[FramePlan], offset: int, info, input_path:
 
 def _concat(parts: pathlib.Path, n_seg: int, source: str, output: str, info) -> None:
     listing = parts / "list.txt"
+    # concat demuxer 會相對清單檔所在目錄解析，必須寫絕對路徑
     listing.write_text(
-        "".join(f"file '{(parts / f'seg{i:04d}.mp4').as_posix()}'\n" for i in range(n_seg)),
+        "".join(f"file '{(parts / f'seg{i:04d}.mp4').resolve().as_posix()}'\n"
+                for i in range(n_seg)),
         encoding="utf-8")
     subtitle = "mov_text" if "mov_text" in info.subtitle_codecs else None
     concat_segments(str(listing), source, output, info.audio_codec, subtitle)

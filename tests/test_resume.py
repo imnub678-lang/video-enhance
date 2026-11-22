@@ -1,3 +1,6 @@
+import pathlib
+from types import SimpleNamespace
+
 import pytest
 
 import engine.pipeline as pipeline
@@ -20,6 +23,25 @@ def test_manifest_invalidated_when_key_changes(tmp_path):
 def test_manifest_survives_corruption(tmp_path):
     (tmp_path / "manifest.json").write_text("{ not json", encoding="utf-8")
     assert pipeline._load_done(tmp_path, {"crf": 19}) == set()
+
+
+def test_concat_list_uses_absolute_paths(tmp_path, monkeypatch):
+    """concat demuxer 相對清單檔解析，寫相對路徑會找不到片段。"""
+    monkeypatch.chdir(tmp_path)
+    parts = pathlib.Path("p")
+    parts.mkdir()
+    (parts / "seg0000.mp4").write_bytes(b"x")
+
+    captured: dict[str, str] = {}
+    monkeypatch.setattr(pipeline, "concat_segments",
+                        lambda lst, *a: captured.update(
+                            text=pathlib.Path(lst).read_text(encoding="utf-8")))
+
+    pipeline._concat(parts, 1, "src", "out",
+                     SimpleNamespace(audio_codec=None, subtitle_codecs=()))
+
+    expected = (parts / "seg0000.mp4").resolve().as_posix()
+    assert f"file '{expected}'" in captured["text"]
 
 
 @pytest.mark.integration
