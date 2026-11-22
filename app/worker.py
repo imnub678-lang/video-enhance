@@ -8,11 +8,11 @@ import traceback
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+from engine.encoders import load as load_profile  # noqa: E402
 from engine.pipeline import run  # noqa: E402
-from engine.policy import decide
-from engine.presets import load
-from engine.probe import probe
-from engine.progress import emit
+from engine.policy import MODEL_CHOICES, Options, decide  # noqa: E402
+from engine.probe import probe  # noqa: E402
+from engine.progress import emit  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = pathlib.Path(r"D:\AI視頻完成品")
 
@@ -21,9 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="worker")
     ap.add_argument("--input", required=True)
     ap.add_argument("--output")
-    ap.add_argument("--preset", default="balanced")
-    ap.add_argument("--model", default="auto",
-                    choices=["auto", "light", "x2plus", "x4plus", "anime-x4"])
+    ap.add_argument("--sr", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--fi", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--fps", type=int, default=60, choices=[60, 120])
+    ap.add_argument("--model", default="light", choices=list(MODEL_CHOICES))
+    ap.add_argument("--profile", default="standard")
     ap.add_argument("--title")
     ap.add_argument("--subtitle")
     ap.add_argument("--models-dir", default="models")
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"找不到輸入檔：{args.input}", file=sys.stderr)
         return 2
     try:
-        load(args.preset)
+        profile = load_profile(args.profile)
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -57,15 +59,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"讀取素材資訊失敗：{exc}", file=sys.stderr)
         return 2
 
-    plan = decide(info, args.preset, args.model)
+    opts = Options(do_sr=args.sr, do_fi=args.fi, model=args.model,
+                   target_fps=args.fps)
+    plan = decide(info, opts)
     if plan.reject_reason:
         print(f"拒絕處理：{plan.reject_reason}", file=sys.stderr)
         return 3
+    if args.fi and not plan.do_fi:
+        print(f"來源已是 {info.fps:.2f}fps，未達目標 {args.fps}fps 之上，補幀略過",
+              file=sys.stderr)
 
     emit("probe", info.frame_count, info.frame_count)
     try:
-        run(args.input, _resolve_output(args), args.preset, args.models_dir,
-            model_choice=args.model)
+        run(args.input, _resolve_output(args), opts, profile, args.models_dir)
     except Exception:  # noqa: BLE001
         traceback.print_exc()
         return 1

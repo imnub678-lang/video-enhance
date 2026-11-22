@@ -15,7 +15,9 @@ def _to_tensor(img_bgr: np.ndarray, device: str, dtype: torch.dtype = torch.floa
 
 
 def _to_numpy(t: torch.Tensor) -> np.ndarray:
-    arr = t.squeeze(0).clamp_(0, 1).mul_(255).round_().to(torch.uint8).cpu().numpy()
+    # clamp 而非 clamp_：張量可能仍被 pending 字典引用（t=0 的輸出幀就是來源張量本身），
+    # 就地修改會把 0–1 的數值污染成 0–255。
+    arr = t.squeeze(0).clamp(0, 1).mul_(255).round_().to(torch.uint8).cpu().numpy()
     return np.ascontiguousarray(arr.transpose(1, 2, 0)[:, :, ::-1])
 
 

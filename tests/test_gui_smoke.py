@@ -11,12 +11,33 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-def test_window_builds_with_six_presets(app):
+def test_window_builds_with_controls(app):
     from app.ui.main_window import MainWindow
 
     w = MainWindow()
-    assert w.preset_combo.count() == 6
+    assert w.cb_sr.isChecked() and w.cb_fi.isChecked()
+    assert w.model_combo.count() == 5
+    assert w.fps_combo.count() == 2
+    assert w.profile_combo.count() == 3
     assert w.btn_start.isEnabled() and not w.btn_stop.isEnabled()
+
+
+def test_unchecking_sr_disables_model_combo(app):
+    from app.ui.main_window import MainWindow
+
+    w = MainWindow()
+    w.cb_sr.setChecked(False)
+    assert not w.model_combo.isEnabled()
+    w.cb_sr.setChecked(True)
+    assert w.model_combo.isEnabled()
+
+
+def test_unchecking_fi_disables_fps_combo(app):
+    from app.ui.main_window import MainWindow
+
+    w = MainWindow()
+    w.cb_fi.setChecked(False)
+    assert not w.fps_combo.isEnabled()
 
 
 def test_name_derived_from_filename(app, make_clip):

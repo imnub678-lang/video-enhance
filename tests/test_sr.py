@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from engine.sr import SuperResolver, tiled_infer
+from engine.sr import SuperResolver, tensor_to_frame, tiled_infer
 
 
 class Identity(torch.nn.Module):
@@ -35,3 +35,11 @@ def test_real_model_upscales_1080p_tile():
     out = sr(np.zeros((1080, 1920, 3), dtype=np.uint8))
     assert out.shape == (4320, 7680, 3)
     assert torch.cuda.max_memory_allocated() < 11 * 2**30
+
+
+def test_tensor_to_frame_does_not_mutate_input():
+    """t=0 的輸出幀就是來源張量本身，就地轉換會污染後續插幀的輸入。"""
+    t = torch.rand(1, 3, 8, 8)
+    before = t.clone()
+    tensor_to_frame(t)
+    assert torch.equal(before, t)

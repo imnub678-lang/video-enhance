@@ -1,7 +1,7 @@
 import pytest
 
 from engine.probe import VideoInfo
-from engine.policy import decide
+from engine.policy import Options, decide
 
 
 def mk(**kw) -> VideoInfo:
@@ -12,91 +12,91 @@ def mk(**kw) -> VideoInfo:
     return VideoInfo(**base)
 
 
-def test_1080p24_balanced_upscales_and_interpolates():
-    p = decide(mk(), "balanced")
+def test_defaults_upscale_and_interpolate():
+    p = decide(mk(), Options())
     assert (p.do_sr, p.scale, p.do_fi, p.target_fps, p.tile) == (True, 4, True, 60, 768)
+    assert p.model == "realesr-general-x4v3"
     assert p.reject_reason is None
 
 
-def test_720p_upscales_with_x4():
-    p = decide(mk(width=1280, height=720), "balanced")
-    assert (p.do_sr, p.scale) == (True, 4)
-
-
-def test_1440p_allowed():
-    p = decide(mk(width=2560, height=1440), "balanced")
-    assert p.reject_reason is None and p.do_sr is True
-
-
-def test_4k_input_rejected():
-    assert decide(mk(width=3840, height=2160), "balanced").reject_reason is not None
-
-
-def test_over_1080p_allowed_for_fi_only():
-    p = decide(mk(width=2560, height=1440), "fi_only")
-    assert p.reject_reason is None
-    assert p.do_sr is False
-
-
-def test_60fps_skips_interpolation():
-    assert decide(mk(fps_num=60), "balanced").do_fi is False
-
-
-def test_120fps_skips_interpolation():
-    assert decide(mk(fps_num=120), "balanced").do_fi is False
-
-
-def test_hdr_rejected():
-    assert decide(mk(is_hdr=True), "balanced").reject_reason is not None
-
-
-def test_sdr_10bit_allowed():
-    assert decide(mk(is_10bit=True, pix_fmt="yuv420p10le"), "balanced").reject_reason is None
-
-
-def test_single_frame_rejected():
-    assert decide(mk(frame_count=1), "balanced").reject_reason is not None
-
-
-def test_sr_only_disables_interpolation():
-    p = decide(mk(), "sr_only")
+def test_sr_only():
+    p = decide(mk(), Options(do_fi=False))
     assert (p.do_sr, p.do_fi) == (True, False)
 
 
-def test_all_sr_presets_use_768_tile():
-    assert {decide(mk(), p).tile for p in ("balanced", "quality", "fast", "sr_only")} == {768}
+def test_fi_only_keeps_resolution():
+    p = decide(mk(), Options(do_sr=False))
+    assert (p.do_sr, p.scale, p.tile, p.do_fi) == (False, 0, 0, True)
+    assert p.model == ""
 
 
-def test_model_choice_x2plus_uses_scale_2():
-    p = decide(mk(), "balanced", "x2plus")
+def test_both_off_is_rejected():
+    assert decide(mk(), Options(do_sr=False, do_fi=False)).reject_reason is not None
+
+
+def test_rejects_4k_input_when_upscaling():
+    assert decide(mk(width=3840, height=2160), Options()).reject_reason is not None
+
+
+def test_4k_input_allowed_when_only_interpolating():
+    p = decide(mk(width=3840, height=2160), Options(do_sr=False))
+    assert p.reject_reason is None
+
+
+def test_hdr_rejected():
+    assert decide(mk(is_hdr=True), Options()).reject_reason is not None
+
+
+def test_10bit_sdr_allowed():
+    p = decide(mk(is_10bit=True, pix_fmt="yuv420p10le"), Options())
+    assert p.reject_reason is None
+
+
+def test_single_frame_rejected_when_interpolating():
+    assert decide(mk(frame_count=1), Options()).reject_reason is not None
+
+
+def test_single_frame_allowed_when_only_upscaling():
+    p = decide(mk(frame_count=1), Options(do_fi=False))
+    assert p.reject_reason is None
+
+
+def test_60fps_source_skips_interpolation_to_60():
+    p = decide(mk(fps_num=60), Options(do_sr=True))
+    assert p.do_fi is False
+
+
+def test_60fps_source_interpolates_to_120():
+    p = decide(mk(fps_num=60), Options(do_sr=False, target_fps=120))
+    assert (p.do_fi, p.target_fps) == (True, 120)
+
+
+def test_60fps_source_without_sr_and_target_60_is_rejected():
+    p = decide(mk(fps_num=60), Options(do_sr=False))
+    assert p.reject_reason is not None
+
+
+def test_120fps_source_skips_interpolation():
+    assert decide(mk(fps_num=120), Options(do_sr=True)).do_fi is False
+
+
+def test_model_choice_sets_scale_and_tile():
+    p = decide(mk(), Options(model="x2plus"))
     assert (p.scale, p.tile, p.model) == (2, 384, "RealESRGAN_x2plus")
+    q = decide(mk(), Options(model="x4plus"))
+    assert (q.scale, q.tile, q.model) == (4, 384, "RealESRGAN_x4plus")
 
 
-def test_model_choice_x4plus_uses_scale_4():
-    p = decide(mk(), "balanced", "x4plus")
-    assert (p.scale, p.tile, p.model) == (4, 384, "RealESRGAN_x4plus")
+def test_anime_model_choice():
+    p = decide(mk(), Options(model="anime"))
+    assert p.model == "realesr-animevideov3"
 
 
-def test_model_choice_light_overrides_preset_model():
-    p = decide(mk(), "anime", "light")
-    assert (p.scale, p.model) == (4, "realesr-general-x4v3")
-
-
-def test_model_choice_anime_x4():
-    p = decide(mk(), "balanced", "anime-x4")
-    assert (p.scale, p.tile, p.model) == (4, 384, "RealESRGAN_x4plus_anime_6B")
-
-
-def test_auto_leaves_model_to_preset():
-    p = decide(mk(), "balanced")
-    assert (p.model, p.scale, p.tile) == ("", 4, 768)
-
-
-def test_unknown_model_choice_raises():
+def test_unknown_model_raises():
     with pytest.raises(ValueError):
-        decide(mk(), "balanced", "x8plus")
+        decide(mk(), Options(model="x8plus"))
 
 
-def test_fi_only_ignores_model_choice():
-    p = decide(mk(), "fi_only", "x4plus")
-    assert (p.do_sr, p.scale, p.tile) == (False, 0, 0)
+def test_invalid_target_fps_raises():
+    with pytest.raises(ValueError):
+        decide(mk(), Options(target_fps=48))

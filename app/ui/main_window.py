@@ -7,12 +7,12 @@ import time
 
 from PySide6.QtCore import QProcess, Qt
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QCheckBox, QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
     QPushButton, QVBoxLayout, QWidget,
 )
 
-from engine.presets import all_presets
+from engine.encoders import all_profiles
 from engine.progress import parse
 from engine.probe import probe
 
@@ -50,19 +50,35 @@ class MainWindow(QMainWindow):
         layout.addWidget(pick)
 
         form = QFormLayout()
-        self.preset_combo = QComboBox()
-        for p in all_presets():
-            self.preset_combo.addItem(p.label, p.name)
-        form.addRow("預設", self.preset_combo)
+        self.cb_sr = QCheckBox("超分到 4K")
+        self.cb_sr.setChecked(True)
+        self.cb_sr.toggled.connect(self._sync_enabled)
+        form.addRow(self.cb_sr)
 
         self.model_combo = QComboBox()
-        self.model_combo.addItem("跟隨預設（快，輕量模型）", "auto")
         self.model_combo.addItem("通用輕量 x4（最快）", "light")
+        self.model_combo.addItem("動漫輕量 x4", "anime")
+        self.model_combo.addItem("動漫強力 x4（慢約 2 倍）", "anime-x4")
         self.model_combo.addItem("強力 x2（慢約 3 倍）", "x2plus")
-        self.model_combo.addItem("強力 x4（慢約 10 倍）", "x4plus")
-        self.model_combo.addItem("動漫強力 x4（慢約 4 倍）", "anime-x4")
+        self.model_combo.addItem("強力 x4（慢約 15 倍）", "x4plus")
         self.model_combo.currentIndexChanged.connect(self._update_hint)
         form.addRow("超分模型", self.model_combo)
+
+        self.cb_fi = QCheckBox("補幀")
+        self.cb_fi.setChecked(True)
+        self.cb_fi.toggled.connect(self._sync_enabled)
+        form.addRow(self.cb_fi)
+
+        self.fps_combo = QComboBox()
+        self.fps_combo.addItem("60 fps", 60)
+        self.fps_combo.addItem("120 fps（檔案約翻倍）", 120)
+        self.fps_combo.currentIndexChanged.connect(self._update_hint)
+        form.addRow("補幀目標", self.fps_combo)
+
+        self.profile_combo = QComboBox()
+        for p in all_profiles():
+            self.profile_combo.addItem(p.label, p.name)
+        form.addRow("編碼", self.profile_combo)
 
         self.model_hint = QLabel("")
         self.model_hint.setStyleSheet("color: #888;")
@@ -108,6 +124,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(log_box, 1)
 
         self.setCentralWidget(root)
+        self._sync_enabled()
 
     # ---------- 檔案 ----------
     def _pick_file(self) -> None:
@@ -139,28 +156,47 @@ class MainWindow(QMainWindow):
             self._append(f"讀取資訊失敗：{exc}")
         self._update_hint()
 
-    def _update_hint(self) -> None:
+    def _sync_enabled(self) -> None:
+        self.model_combo.setEnabled(self.cb_sr.isChecked())
+        self.fps_combo.setEnabled(self.cb_fi.isChecked())
+        self._update_hint()
+
+    def _model_hint_text(self) -> str:
         choice = self.model_combo.currentData()
         info = self._info
-        if info is None or choice == "auto":
-            self.model_hint.setText("")
-            return
+        if info is None:
+            return ""
         need = 2160 / max(1, info.height)
+        if choice == "anime":
+            return "動漫輕量模型，速度與通用版相近"
         if choice == "anime-x4":
-            self.model_hint.setText("動漫／插畫專用，線條比輕量版銳利；實景素材不適用")
-        elif choice == "light":
-            self.model_hint.setText(
-                f"此素材約需 {need:.2f}×，通用輕量模型走 4× 後縮回 4K，速度最快")
-        elif choice == "x2plus":
+            return "動漫／插畫專用，線條比輕量版銳利；實景素材不適用"
+        if choice == "light":
+            return f"約需 {need:.2f}×，通用輕量模型走 4× 後縮回 4K，最快"
+        if choice == "x2plus":
             if need <= 2.2:
-                self.model_hint.setText(f"此素材約需 {need:.2f}×，x2 足夠，畫質最佳")
-            else:
-                self.model_hint.setText(
-                    f"此素材約需 {need:.2f}×，x2 只能到 {info.height * 2}p，"
-                    "剩下靠插值，會偏糊；建議改用 x4")
+                return f"約需 {need:.2f}×，x2 足夠，畫質最佳"
+            return (f"約需 {need:.2f}×，x2 只能到 {info.height * 2}p，"
+                    "剩下靠插值會偏糊；建議改用 x4")
+        return f"約需 {need:.2f}×，x4 會過度放大後縮回 4K，較慢且不一定更好"
+
+    def _update_hint(self) -> None:
+        parts: list[str] = []
+        if self.cb_sr.isChecked():
+            text = self._model_hint_text()
+            if text:
+                parts.append(text)
         else:
-            self.model_hint.setText(
-                f"此素材約需 {need:.2f}×，x4 會過度放大後縮回 4K，較慢且不一定更好")
+            parts.append("不超分，輸出維持原解析度")
+
+        if self.cb_fi.isChecked():
+            target = self.fps_combo.currentData()
+            if self._info is not None and target <= round(self._info.fps):
+                parts.append(f"來源已 {self._info.fps:.2f}fps，未達 {target}fps，補幀會略過")
+        else:
+            parts.append("不補幀，維持原幀率")
+
+        self.model_hint.setText("　·　".join(parts))
 
     def dragEnterEvent(self, event):  # noqa: N802
         if event.mimeData().hasUrls():
@@ -189,8 +225,11 @@ class MainWindow(QMainWindow):
             str(PROJECT_ROOT / "app" / "worker.py"),
             "--input", self._input,
             "--output", out,
-            "--preset", self.preset_combo.currentData(),
+            "--profile", self.profile_combo.currentData(),
             "--model", self.model_combo.currentData(),
+            "--fps", str(self.fps_combo.currentData()),
+            "--sr" if self.cb_sr.isChecked() else "--no-sr",
+            "--fi" if self.cb_fi.isChecked() else "--no-fi",
             "--models-dir", str(PROJECT_ROOT / "models"),
         ]
         self._proc = QProcess(self)

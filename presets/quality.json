@@ -1,1 +1,0 @@
-{"label": "小檔案（x265，慢 4 倍）", "do_sr": true, "do_fi": true, "model": "realesr-general-x4v3", "tile": 768, "encoder": "libx265", "crf": 18}

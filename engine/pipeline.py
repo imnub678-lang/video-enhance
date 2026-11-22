@@ -5,9 +5,9 @@ import pathlib
 
 import torch
 
+from engine.encoders import Profile
 from engine.ffmpeg_pipe import Decoder, Encoder
-from engine.policy import TARGET_H, TARGET_W, decide
-from engine.presets import load
+from engine.policy import TARGET_H, TARGET_W, Options, decide
 from engine.probe import probe
 from engine.progress import emit
 from engine.sr import frame_to_tensor, tensor_to_frame
@@ -24,28 +24,28 @@ def _decoded_size(width: int, height: int, rotation: int) -> tuple[int, int]:
     return _even(width), _even(height)
 
 
-def run(input_path: str, output_path: str, preset: str,
-        models_dir: str = "models", on_progress=None,
-        model_choice: str = "auto") -> None:
+def _src_fps(info) -> float:
+    fps = info.frame_count / info.duration if info.duration > 0 else info.fps
+    return fps if fps > 0 else float(info.fps or 24)
+
+
+def _frame_plans(info, plan) -> tuple[list[FramePlan], int]:
+    if plan.do_fi:
+        return schedule(info.frame_count, _src_fps(info), plan.target_fps), plan.target_fps
+    return ([FramePlan(i, i, i, 0.0) for i in range(info.frame_count)],
+            max(1, round(_src_fps(info))))
+
+
+def run(input_path: str, output_path: str, opts: Options, profile: Profile,
+        models_dir: str = "models", on_progress=None) -> None:
     info = probe(input_path)
-    plan = decide(info, preset, model_choice)
+    plan = decide(info, opts)
     if plan.reject_reason:
         raise ValueError(plan.reject_reason)
 
-    p = load(preset)
     dec_w, dec_h = _decoded_size(info.width, info.height, info.rotation)
     out_w, out_h = (TARGET_W, TARGET_H) if plan.do_sr else (dec_w, dec_h)
-
-    src_fps = info.frame_count / info.duration if info.duration > 0 else info.fps
-    if src_fps <= 0:
-        src_fps = float(info.fps or 24)
-
-    if plan.do_fi:
-        plans = schedule(info.frame_count, src_fps, plan.target_fps)
-        enc_fps = plan.target_fps
-    else:
-        plans = [FramePlan(i, i, i, 0.0) for i in range(info.frame_count)]
-        enc_fps = max(1, round(src_fps))
+    plans, enc_fps = _frame_plans(info, plan)
 
     pathlib.Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -54,8 +54,7 @@ def run(input_path: str, output_path: str, preset: str,
         from engine.models import ensure_model
         from engine.sr import SuperResolver
 
-        weights = ensure_model(plan.model or p.model, models_dir)
-        sr = SuperResolver(weights, plan.scale, plan.tile)
+        sr = SuperResolver(ensure_model(plan.model, models_dir), plan.scale, plan.tile)
     if plan.do_fi:
         from engine.fi import Interpolator
         from engine.models import ensure_model
@@ -65,7 +64,7 @@ def run(input_path: str, output_path: str, preset: str,
     subtitle = "mov_text" if "mov_text" in info.subtitle_codecs else None
     dec = Decoder(input_path, dec_w, dec_h, info.frame_count)
     enc = Encoder(output_path, out_w, out_h, enc_fps, input_path,
-                  info.audio_codec, subtitle, crf=p.crf, codec=p.encoder)
+                  info.audio_codec, subtitle, crf=profile.crf, codec=profile.encoder)
 
     total = len(plans)
     pending: dict[int, object] = {}
