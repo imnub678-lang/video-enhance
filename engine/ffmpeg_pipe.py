@@ -12,13 +12,17 @@ COPYABLE_AUDIO = {"aac", "mp3", "ac3", "eac3", "alac", "opus", "flac"}
 
 
 class Decoder:
-    def __init__(self, path: str, width: int, height: int, frame_count: int = 0):
+    def __init__(self, path: str, width: int, height: int, frame_count: int = 0,
+                 start_time: float = 0.0):
         self.width = width
         self.height = height
         self.frame_count = frame_count
         self._frame_bytes = width * height * 3
-        cmd = [
-            FFMPEG, "-v", "error", "-i", path,
+        cmd = [FFMPEG, "-v", "error"]
+        if start_time > 0:
+            cmd += ["-ss", f"{start_time:.6f}"]
+        cmd += [
+            "-i", path,
             "-vf", f"scale={width}:{height}:flags=bicubic",
             "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
         ]
@@ -100,3 +104,28 @@ class Encoder:
             self.proc.stderr.close()
         if self.proc.returncode != 0:
             raise RuntimeError(f"編碼失敗：{err.decode('utf-8', 'replace').strip()[:400]}")
+
+
+def concat_segments(list_path: str, source: str, output: str,
+                    audio_codec: str | None, subtitle_codec: str | None) -> None:
+    """把分段檔串成成品，並從原始素材掛回音軌與內封字幕。"""
+    cmd = [FFMPEG, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", list_path]
+    if audio_codec is not None:
+        cmd += ["-i", source]
+    cmd += ["-map", "0:v:0"]
+    if audio_codec is not None:
+        cmd += ["-map", "1:a:0?"]
+    if subtitle_codec == "mov_text":
+        cmd += ["-map", "1:s:0?", "-c:s", "copy"]
+    cmd += ["-c:v", "copy"]
+    if audio_codec is not None:
+        if audio_codec in COPYABLE_AUDIO:
+            cmd += ["-c:a", "copy"]
+        else:
+            cmd += ["-c:a", "aac", "-b:a", "192k"]
+    cmd += ["-movflags", "+faststart", output]
+
+    res = subprocess.run(cmd, capture_output=True, creationflags=NO_WINDOW)
+    if res.returncode != 0:
+        err = res.stderr.decode("utf-8", "replace").strip()
+        raise RuntimeError(f"分段串接失敗：{err[:400]}")

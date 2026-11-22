@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--title")
     ap.add_argument("--subtitle")
     ap.add_argument("--models-dir", default="models")
+    ap.add_argument("--no-resume", dest="resume", action="store_false")
     return ap
 
 
@@ -71,7 +72,8 @@ def main(argv: list[str] | None = None) -> int:
 
     emit("probe", info.frame_count, info.frame_count)
     try:
-        run(args.input, _resolve_output(args), opts, profile, args.models_dir)
+        run(args.input, _resolve_output(args), opts, profile, args.models_dir,
+            resume=args.resume)
     except Exception:  # noqa: BLE001
         traceback.print_exc()
         return 1
