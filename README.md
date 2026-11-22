@@ -89,7 +89,7 @@ RIFE v4.26 依時間戳插幀，非整數倍也能正確處理（24→60、24→
 
 RTX 5070 Ti Laptop，TensorRT FP16。7 秒 1080p24 素材跑完整超分＋補幀約 100 秒；10 秒約 2.4 分鐘，60 秒約 14 分鐘。
 
-首次執行會編譯 TensorRT 引擎（SR 約 6 秒、RRDBNet 45–55 秒、RIFE 4K 約 62 秒），之後快取在 `models/trt_cache/`。不想用 TRT 可設環境變數 `VIDEOTOOL_NO_TRT=1`。
+首次執行會編譯 TensorRT 引擎（SR 約 6 秒、RRDBNet 45–55 秒），之後快取在 `models/trt_cache/`。不想用 TRT 可設環境變數 `VIDEOTOOL_NO_TRT=1`。**補幀不使用 TRT**，原因見開發備註。
 
 解碼與編碼各跑獨立執行緒，但實測在 1080p→4K 這種 GPU 滿載的情境只快 4%；小素材（I/O 佔比高）可快 40%。
 
@@ -147,6 +147,7 @@ tests/      單元與整合測試
 - `RealESRGAN_x2plus` 的 `conv_first` 是 12 通道（內部 `pixel_unshuffle(x, 2)` 把 3 通道展開），x4 版是 3 通道；`load_rrdb` 靠這個差異自動判斷倍率
 - `SuperResolver` 依權重檔名前綴選架構：`RealESRGAN_*` 走 RRDBNet，其餘走 SRVGG
 - RIFE 走官方 v4.26 的 `IFNet_HDv3`（`engine/arch_rife.py`），`flownet.pkl` 的 key 帶 `module.` 前綴需剝除
+- **補幀不用 TensorRT**：編譯出來的 IFNet 引擎不尊重時間參數，同一組輸入餵 t=0.25/0.5/0.75 得到幾乎相同輸出（4K 下位置比例恆為 1.00，等於回傳後一張原幀），補幀變成複製幀。eager 在 4K 單次 0.18 秒、位置比例 0.28/0.53/0.83 正確，因此 `Interpolator(use_trt=False)` 為預設
 - 推論用 FP16，實測與 FP32 的像素差 0.04（滿分 255）
 - 管線全程走 GPU 張量，只在解碼後與編碼前各轉一次 numpy；早期版本每階段都轉，速度差 2.28 倍
 - **`tensor_to_frame` 必須用非就地的 `clamp`**：補幀時 `t=0` 的輸出幀就是 `pending` 裡的來源張量本身，`clamp_` 會把它從 0–1 汙染成 0–255，下一個插幀就把污染值餵進 RIFE。舊版因此讓每支補幀成品的**最後一幀變成純白**

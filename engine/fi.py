@@ -19,8 +19,16 @@ def to_numpy(t: torch.Tensor) -> np.ndarray:
 
 
 class Interpolator:
+    """RIFE 插幀。
+
+    use_trt 預設關閉：實測 TensorRT 編譯出來的 IFNet 引擎不尊重時間參數，
+    同一組輸入餵 t=0.25/0.5/0.75 會得到幾乎相同的輸出（4K 下位置比例恆為 1.00，
+    等於直接回傳後一張原幀），補幀形同複製幀。eager 在 4K 單次約 0.18 秒，
+    正確且不比引擎慢，因此不用 TRT。
+    """
+
     def __init__(self, weights: str, device: str = "cuda", dtype: torch.dtype = torch.float16,
-                 use_trt: bool = True):
+                 use_trt: bool = False):
         from engine.arch_rife import load_rife
 
         self.model = load_rife(weights, device=device, dtype=dtype)
