@@ -25,3 +25,8 @@ def test_all_three_present():
 def test_missing_profile_raises():
     with pytest.raises(FileNotFoundError):
         load("nope")
+
+
+def test_profiles_ordered_quality_first():
+    """第一個檔位就是介面預設，必須是 standard（與 worker 預設一致）。"""
+    assert [p.name for p in all_profiles()] == ["standard", "fast", "small"]

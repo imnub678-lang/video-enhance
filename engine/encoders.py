@@ -6,6 +6,7 @@ import pathlib
 from dataclasses import dataclass
 
 DEFAULT_DIR = pathlib.Path(__file__).resolve().parent.parent / "encoders"
+ORDER = ("standard", "fast", "small")
 
 
 @dataclass(frozen=True)
@@ -26,5 +27,12 @@ def load(name: str, profiles_dir: str | pathlib.Path = DEFAULT_DIR) -> Profile:
 
 
 def all_profiles(profiles_dir: str | pathlib.Path = DEFAULT_DIR) -> list[Profile]:
+    """依畫質優先排序，第一個即為介面預設。
+
+    不直接用檔名字母序：那會讓 fast 排最前面而成為預設，
+    與 worker 的 --profile 預設值（standard）不一致。
+    """
     d = pathlib.Path(profiles_dir)
-    return [load(p.stem, d) for p in sorted(d.glob("*.json"))]
+    names = {p.stem for p in d.glob("*.json")}
+    ordered = [n for n in ORDER if n in names] + sorted(names - set(ORDER))
+    return [load(n, d) for n in ordered]
