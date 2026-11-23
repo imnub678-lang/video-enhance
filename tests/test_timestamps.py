@@ -33,3 +33,15 @@ def test_last_frame_never_exceeds():
 
 def test_empty_input():
     assert schedule(0, 24.0, 60) == []
+
+
+def test_near_integer_fps_snaps_to_source_frames():
+    """幀率由 frame_count/duration 推算時帶微小誤差，原幀不該被當成插值幀。
+
+    實測 1440p 素材：121 幀 / 2.0167 秒 = 59.99999fps，輸出到 120fps 時
+    原本每個原幀都得到 t=0.99999983，導致 120 個原幀白跑一次補幀網路。
+    """
+    plans = schedule(121, 121 / 2.0166666666666666, 120)
+    assert len(plans) == 242
+    assert sum(1 for p in plans if p.t > 0) == 120
+    assert all(p.t == 0.0 or abs(p.t - 0.5) < 1e-6 for p in plans)

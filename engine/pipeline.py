@@ -108,8 +108,19 @@ def _decoded_size(width: int, height: int, rotation: int) -> tuple[int, int]:
 
 
 def _src_fps(info) -> float:
-    fps = info.frame_count / info.duration if info.duration > 0 else info.fps
-    return fps if fps > 0 else float(info.fps or 24)
+    """來源幀率。CFR 用容器回報值（精確），VFR 用幀數／時長推算。
+
+    直接用 frame_count/duration 會帶誤差：容器時長常含音軌尾巴，
+    實測 576 幀 / 9.6212 秒 = 59.868（實際 60.0）。這個誤差會讓原本落在
+    整數位置的幀變成 t=0.998x，導致每個原幀都白跑一次補幀網路。
+    判準用「時長與幀數是否相符」，不受影片長度影響。
+    """
+    derived = info.frame_count / info.duration if info.duration > 0 else 0.0
+    if info.fps and derived > 0:
+        if abs(info.duration - info.frame_count / info.fps) <= 0.1:
+            return float(info.fps)
+        return derived
+    return float(info.fps or 24)
 
 
 def _frame_plans(info, plan) -> tuple[list[FramePlan], int]:
