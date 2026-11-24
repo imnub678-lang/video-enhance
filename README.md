@@ -12,12 +12,22 @@
 
 ## 安裝
 
-一般使用者直接執行安裝程式即可，torch、ffmpeg 與所有依賴都已打包，不需另外安裝 Python 或顯卡驅動以外的環境。安裝不需要系統管理員權限。
+### 一般使用者：安裝程式
 
-從原始碼執行：
+到 [Releases](../../releases) 下載 `VideoEnhance_NVIDIA_v1.0.0_setup`。安裝檔 3.8 GB，超過 GitHub 單檔案 2 GB 上限，拆成 `.part1` 與 `.part2` 兩卷。兩個檔案都下載到**同一個資料夾**後，在該資料夾執行：
 
 ```bat
-git clone <本倉庫網址>
+copy /B VideoEnhance_NVIDIA_v1.0.0_setup.part1+VideoEnhance_NVIDIA_v1.0.0_setup.part2 VideoEnhance_NVIDIA_v1.0.0_setup.exe
+```
+
+再雙擊合併出的 exe 安裝。安裝不需要系統管理員權限，torch、ffmpeg 與所有依賴都已打包，不需另外安裝 Python 或環境。
+
+### 從原始碼執行
+
+需要先自行安裝 [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) 並加入 PATH（原始碼模式沒有打包 ffmpeg），接著：
+
+```bat
+git clone https://github.com/imnub678-lang/video-enhance.git
 cd video-enhance
 py -3.13 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
