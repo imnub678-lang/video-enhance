@@ -23,6 +23,27 @@ MODEL_CHOICES: dict[str, tuple[str, int, int]] = {
 }
 DEFAULT_MODEL = "light"
 
+# 給一般使用者的兩個白話維度，內部映射到上面的技術模型。
+QUALITY_CHOICES = ("fast", "standard", "best")
+CONTENT_CHOICES = ("live", "anime")
+
+
+def qualities_for(content: str) -> tuple[str, ...]:
+    """動畫只有輕量與強力兩個模型，畫質就只給快／最佳，避免兩個選項對到同一個模型。"""
+    return ("fast", "best") if content == "anime" else QUALITY_CHOICES
+
+
+def resolve_model(quality: str, content: str, src_height: int) -> str:
+    if content == "anime":
+        return "anime" if quality == "fast" else "anime-x4"
+    if quality == "fast":
+        return "light"
+    if quality == "best":
+        return "x4plus"
+    # 標準＋實拍：1080p 以上用 x2（剛好 2 倍，沒有多餘重採樣）；
+    # 低於 1000p 時 x2 到不了 4K，改用 4× 輕量。
+    return "x2plus" if src_height >= 1000 else "light"
+
 
 @dataclass(frozen=True)
 class Options:
@@ -43,7 +64,18 @@ class Plan:
     model: str = ""
 
 
-def decide(info: VideoInfo, opts: Options) -> Plan:
+def tile_for_vram(base: int, vram: float | None) -> int:
+    """顯存越小分塊越小，避免 4K 輸出時 OOM。sr.py 另有 OOM 時再降一級的保險。"""
+    if vram is None or vram >= 12:
+        return base
+    if vram >= 8:
+        return min(base, 512)
+    if vram >= 6:
+        return min(base, 384)
+    return min(base, 256)
+
+
+def decide(info: VideoInfo, opts: Options, vram: float | None = None) -> Plan:
     if opts.model not in MODEL_CHOICES:
         raise ValueError(f"未知模型：{opts.model}")
     if opts.target_fps not in ALLOWED_TARGET_FPS:
@@ -68,6 +100,7 @@ def decide(info: VideoInfo, opts: Options) -> Plan:
             "且沒有勾選超分，沒有事情可做")
 
     model, scale, tile = MODEL_CHOICES[opts.model]
+    tile = tile_for_vram(tile, vram)
     return Plan(scale=scale if do_sr else 0,
                 tile=tile if do_sr else 0,
                 do_sr=do_sr, do_fi=do_fi,

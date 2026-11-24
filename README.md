@@ -2,60 +2,66 @@
 
 本機執行的桌面工具：影片超分到 4K、補幀到 60 或 120fps，兩者可獨立開關。全程不傳雲端、不限片長、中斷可續傳。
 
-## 啟動
+## 系統需求
 
-雙擊 `run.bat`，或：
+- Windows 10／11 64-bit
+- **NVIDIA 獨立顯卡**（CUDA 版）；AMD 與純 CPU 環境請見下方說明
+- 建議 8 GB 以上顯存。顯存較小時程式會自動縮小處理分塊（≥8GB 用 512、≥6GB 用 384、其餘 256），降低 OOM 風險
+
+> 目前提供的安裝檔是 **NVIDIA 版**。AMD 需要 Windows 版 ROCm 執行環境，官方 PyTorch 尚未提供對應 wheel；純 CPU 環境在首啟掃描時會被擋下，不提供入口。
+
+## 安裝
+
+一般使用者直接執行安裝程式即可，torch、ffmpeg 與所有依賴都已打包，不需另外安裝 Python 或顯卡驅動以外的環境。安裝不需要系統管理員權限。
+
+從原始碼執行：
 
 ```bat
-cd /d D:\video-enhance
+git clone <本倉庫網址>
+cd video-enhance
+py -3.13 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe app\main.py
 ```
 
+或直接雙擊 `run.bat`（需先建立 `.venv`）。
+
+## 第一次啟動
+
+1. **選輸出資料夾**：只問一次，之後記在 QSettings
+2. **掃描裝置**：顯示顯卡、顯存、CPU 核心、記憶體、可用磁碟、ffmpeg 路徑
+3. **確認模型清單**：六個模型預設全勾（合計約 178 MB），可取消不需要的
+4. **下載模型**：逐項下載並做 SHA256 校驗
+
+模型放在 `%LOCALAPPDATA%\VideoEnhance\models\`（原始碼模式放在專案 `models\`）。解除安裝不會刪除已下載的模型。
+
+介面會依系統語言自動切換繁體中文／簡體中文／英文。
+
 ## 用法
 
-1. 把影片拖進視窗（支援 mp4／mov／mkv／avi／m4v／wmv）
-2. 勾選要做的事：☑ 超分到 4K、☑ 補幀
-3. 選超分模型、補幀目標幀率、編碼檔位
-4. 確認主題／副題（預設從檔名以 `_` 分割）
-5. 按「開始」
+1. 把影片拖進視窗（或按「選擇影片」，支援 mp4／mov／mkv／avi／m4v／wmv）
+2. 選**素材類型**：實拍／動畫
+3. 選**畫質**：實拍有快／標準／最佳；動畫只有快／最佳
+4. 勾選要做的事：☑ 超分到 4K、☑ 補幀
+5. 選補幀目標幀率、編碼檔位
+6. 確認主題／副題（預設從檔名以 `_` 分割）與輸出目錄
+7. 按「開始」
 
-輸出檔名為 `主題_副題.mp4`，預設放在 `D:\AI視頻完成品\`。
+「素材 × 畫質」會自動對應到適合的模型，不需要選技術模型名稱：
 
-取消勾選某項時，對應的下拉選單會變灰。下方提示列會依素材解析度算出「需要幾倍」並給建議。
-
-## 三個控制項
-
-| 控制項 | 選項 | 說明 |
-|---|---|---|
-| ☑ 超分到 4K | 模型 5 選 | 輸出固定 3840×2160 |
-| ☑ 補幀 | 目標 60 / 120 fps | 來源已達目標時自動略過並在日誌提示 |
-| 編碼 | 標準 / 快速 / 小檔案 | 只影響檔案大小與編碼時間，不影響畫面 |
-
-四種組合都能跑：只超分、只補幀、兩者都做、都不做（都不做會被拒絕）。
-
-## 超分模型
-
-| 選項 | 權重 | 倍率 | 參數 | 1080p→4K 每幀 | 適用 |
-|---|---|---|---|---|---|
-| `light` | `realesr-general-x4v3` | 4× | 1.21M | 0.19s | 通用、最快（預設） |
-| `anime` | `realesr-animevideov3` | 4× | 0.62M | 0.19s | 動漫輕量 |
-| `anime-x4` | `RealESRGAN_x4plus_anime_6B` | 4× | 4.47M | 0.33s | 動漫／插畫強力 |
-| `x2plus` | `RealESRGAN_x2plus` | 2× | 16.70M | 0.54s | **實景照片** 1080p→4K |
-| `x4plus` | `RealESRGAN_x4plus` | 4× | 16.70M | 2.91s | 實景照片，細節最強 |
+| 素材 | 畫質 | 模型 | 倍率 |
+|---|---|---|---|
+| 實拍 | 快 | `realesr-general-x4v3` | 4× |
+| 實拍 | 標準 | `x2plus`（來源 ≥1000p）或 `light` | 2× / 4× |
+| 實拍 | 最佳 | `RealESRGAN_x4plus` | 4× |
+| 動畫 | 快 | `realesr-animevideov3` | 4× |
+| 動畫 | 最佳 | `RealESRGAN_x4plus_anime_6B` | 4× |
 
 倍率是「模型倍率」，輸出目標一律 4K。`x2` 適合來源需要約 2 倍的情況（1080p→4K 剛好 2.00×，沒有多餘重採樣）；來源低於 540p 時 `x2` 不足，剩下靠插值會偏糊。
 
-**實測結論（1080p24 3 秒 → 4K60 端到端）**
+**重要**：`x2plus`／`x4plus` 是照片模型，用在動漫／插畫上會把線條抹平（實測銳度掉到通用模型的 50–70%）。動漫內容請選動畫；反之動畫模型用在實景素材上會有塑料感。
 
-| 模型 | 耗時 |
-|---|---|
-| `anime` | 44 秒 |
-| `light` | 46 秒 |
-| `x2plus` | 76 秒 |
-| `anime-x4` | 約 70 秒（首次含 TRT 編譯 113 秒） |
-| `x4plus` | 約 550 秒（推算） |
-
-**重要**：`x2plus`／`x4plus` 是照片模型，用在動漫／插畫上會把線條抹平（實測銳度掉到通用模型的 50–70%）。動漫內容請用 `anime-x4`；反之 `anime-x4` 用在實景素材上會有塑料感。
+取消勾選某項時，對應的下拉選單會變灰。下方提示列會依素材解析度算出「需要幾倍」並給建議。
 
 ## 補幀目標
 
@@ -75,9 +81,11 @@ RIFE v4.26 依時間戳插幀，非整數倍也能正確處理（24→60、24→
 | 快速 | `hevc_nvenc` | cq21 | 約 1.0× | 小 1.2% |
 | 小檔案 | `libx265` | crf18 | **4.2×** | **小 45%** |
 
-「小檔案」只改編碼，**超分結果與標準完全相同**。要更好的畫面請調超分模型，不要靠這個檔位。
+「小檔案」只改編碼，**超分結果與標準完全相同**。要更好的畫面請調畫質，不要靠這個檔位。
 
 標準與快速在 NVENC 上幾乎沒有差別：實測同一支 1080p24 3 秒 → 4K60，耗時 60 秒 vs 61 秒，檔案 11.94 MB vs 11.80 MB，SSIM Y 0.9988。瓶頸在超分不在編碼，所以預設選畫質優先的標準，沒有實質成本。
+
+AMD 顯卡會自動改用 `hevc_amf`；沒有可用的硬體編碼器時退回 `libx265`。
 
 ## 斷點續傳
 
@@ -100,7 +108,9 @@ RTX 5070 Ti Laptop，TensorRT FP16。實測 9.62 秒 1440p60 素材：
 
 耗時幾乎全部是 GPU 計算：4K60 中超分佔 161 秒；4K120 再加上補幀 136 秒（575 幀 × 237ms）。
 
-首次執行會編譯 TensorRT 引擎（SR 約 6 秒、RRDBNet 45–55 秒），之後快取在 `models/trt_cache/`。不想用 TRT 可設環境變數 `VIDEOTOOL_NO_TRT=1`。**補幀不使用 TRT**，原因見開發備註。
+首次執行會編譯 TensorRT 引擎（SR 約 6 秒、RRDBNet 45–55 秒），之後快取在模型目錄的 `trt_cache\`。不想用 TRT 可設環境變數 `VIDEOTOOL_NO_TRT=1`。**補幀不使用 TRT**，原因見開發備註。
+
+其他 1080p24 3 秒 → 4K60 端到端實測：`anime` 44 秒、`light` 46 秒、`x2plus` 76 秒、`anime-x4` 約 70 秒（首次含 TRT 編譯 113 秒）、`x4plus` 約 550 秒（推算）。
 
 解碼與編碼各跑獨立執行緒，但實測在 1080p→4K 這種 GPU 滿載的情境只快 4%；小素材（I/O 佔比高）可快 40%。
 
@@ -121,7 +131,7 @@ RTX 5070 Ti Laptop，TensorRT FP16。實測 9.62 秒 1440p60 素材：
 
 ## 模型
 
-放在 `models/`，首次執行自動下載並校驗 SHA256：
+首啟精靈會自動下載並校驗 SHA256：
 
 | 檔案 | 用途 | 大小 |
 |---|---|---|
@@ -132,16 +142,27 @@ RTX 5070 Ti Laptop，TensorRT FP16。實測 9.62 秒 1440p60 素材：
 | `RealESRGAN_x4plus_anime_6B.pth` | 動漫 4 倍超分（強力） | 18 MB |
 | `flownet.pkl` | RIFE v4.26 補幀 | 24 MB |
 
-手動下載：刪掉對應檔案再執行一次即可。
+要重新下載，刪掉對應檔案再重跑精靈即可。
 
 ## 目錄結構
 
 ```
-engine/     管線核心（probe、policy、timestamps、sr、fi、pipeline）
-app/        GUI 與 worker
-encoders/   編碼檔位（standard／fast／small）
-tests/      單元與整合測試
+app/         GUI、worker、設定與 i18n
+  ui/        主視窗、玻璃外殼、主題、首啟精靈
+engine/      管線核心（probe、policy、timestamps、sr、fi、pipeline、backend）
+encoders/    編碼檔位（standard／fast／small）
+build/       PyInstaller spec、Inno Setup 腳本、圖示產生器
+tests/       單元與整合測試
 ```
+
+## 打包
+
+```bat
+.venv\Scripts\python.exe -m PyInstaller build/video_enhance.spec --noconfirm --clean
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" build\setup_nvidia.iss
+```
+
+AMD 版需先在 ROCm 版 torch 環境下產出 `dist\VideoEnhance-AMD`，再執行 `build\setup_amd.iss`。
 
 ## 測試
 

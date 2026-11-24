@@ -7,10 +7,22 @@ from __future__ import annotations
 
 import os
 import pathlib
+import sys
 
 import torch
 
-CACHE_DIR = pathlib.Path(__file__).resolve().parent.parent / "models" / "trt_cache"
+def _cache_dir() -> pathlib.Path:
+    override = os.environ.get("VIDEOTOOL_CACHE_DIR")
+    if override:
+        return pathlib.Path(override)
+    if getattr(sys, "frozen", False):
+        # 安裝在 Program Files 時不能寫，快取一樣放使用者目錄。
+        base = pathlib.Path(os.environ.get("LOCALAPPDATA") or pathlib.Path.home())
+        return base / "VideoEnhance" / "trt_cache"
+    return pathlib.Path(__file__).resolve().parent.parent / "models" / "trt_cache"
+
+
+CACHE_DIR = _cache_dir()
 
 
 def available() -> bool:

@@ -2,7 +2,9 @@ import subprocess
 import pathlib
 import pytest
 
-FFMPEG = r"D:\ffmpeg\bin\ffmpeg.exe"
+from engine.backend import resolve_ffmpeg
+
+FFMPEG = resolve_ffmpeg()
 TMP = pathlib.Path(__file__).parent / "tmp"
 
 

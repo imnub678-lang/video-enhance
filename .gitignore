@@ -5,4 +5,9 @@ __pycache__/
 output/
 tests/tmp/
 vendor/
-models/
+dist/
+build/_work/
+build/build/
+build/*.log
+.pytest_cache/
+docs/superpowers/

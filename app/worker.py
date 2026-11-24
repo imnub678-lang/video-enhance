@@ -8,13 +8,12 @@ import traceback
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+from engine import backend  # noqa: E402
 from engine.encoders import load as load_profile  # noqa: E402
 from engine.pipeline import run  # noqa: E402
 from engine.policy import MODEL_CHOICES, Options, decide  # noqa: E402
 from engine.probe import probe  # noqa: E402
 from engine.progress import emit  # noqa: E402
-
-DEFAULT_OUTPUT_DIR = pathlib.Path(r"D:\AI視頻完成品")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,10 +35,10 @@ def build_parser() -> argparse.ArgumentParser:
 def _resolve_output(args) -> str:
     if args.output:
         return args.output
-    stem = pathlib.Path(args.input).stem
-    title = args.title or stem
+    src = pathlib.Path(args.input)
+    title = args.title or src.stem
     name = f"{title}_{args.subtitle}" if args.subtitle else title
-    return str(DEFAULT_OUTPUT_DIR / f"{name}.mp4")
+    return str(src.parent / f"{name}.mp4")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     opts = Options(do_sr=args.sr, do_fi=args.fi, model=args.model,
                    target_fps=args.fps)
-    plan = decide(info, opts)
+    plan = decide(info, opts, backend.vram_gb())
     if plan.reject_reason:
         print(f"拒絕處理：{plan.reject_reason}", file=sys.stderr)
         return 3

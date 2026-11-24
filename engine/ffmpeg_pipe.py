@@ -5,7 +5,9 @@ import subprocess
 
 import numpy as np
 
-FFMPEG = r"D:\ffmpeg\bin\ffmpeg.exe"
+from engine.backend import resolve_ffmpeg
+
+FFMPEG = resolve_ffmpeg()
 NO_WINDOW = subprocess.CREATE_NO_WINDOW
 
 COPYABLE_AUDIO = {"aac", "mp3", "ac3", "eac3", "alac", "opus", "flac"}
@@ -75,6 +77,9 @@ class Encoder:
         cmd += ["-c:v", codec]
         if codec == "libx265":
             cmd += ["-crf", str(crf), "-preset", "medium"]
+        elif codec == "hevc_amf":
+            cmd += ["-rc", "cqp", "-qp_i", str(crf), "-qp_p", str(crf),
+                    "-quality", "balanced"]
         else:
             cmd += ["-preset", "p5", "-cq", str(crf)]
         cmd += ["-pix_fmt", "yuv420p10le"]

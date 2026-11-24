@@ -13,6 +13,7 @@ import threading
 
 import torch
 
+from engine import backend
 from engine.encoders import Profile
 from engine.ffmpeg_pipe import Decoder, Encoder, concat_segments
 from engine.policy import TARGET_H, TARGET_W, Options, decide
@@ -141,15 +142,19 @@ def _report(on_progress, interp, done: int, total: int) -> None:
 def _build_models(plan, models_dir: str):
     from engine.models import ensure_model
 
+    device = backend.device()
+    dtype = backend.dtype()
     sr = interp = None
     if plan.do_sr:
         from engine.sr import SuperResolver
 
-        sr = SuperResolver(ensure_model(plan.model, models_dir), plan.scale, plan.tile)
+        sr = SuperResolver(ensure_model(plan.model, models_dir), plan.scale, plan.tile,
+                           device=device, dtype=dtype, use_trt=backend.has_trt())
     if plan.do_fi:
         from engine.fi import Interpolator
 
-        interp = Interpolator(ensure_model("rife426", models_dir))
+        interp = Interpolator(ensure_model("rife426", models_dir),
+                              device=device, dtype=dtype)
     return sr, interp
 
 
@@ -175,7 +180,7 @@ def _process(plans: list[FramePlan], dec: Decoder, enc: Encoder, sr, interp,
                     frame = prefetch.read()
                     if frame is None:
                         break
-                    tensor = frame_to_tensor(frame, "cuda", torch.float16)
+                    tensor = frame_to_tensor(frame, backend.device(), backend.dtype())
                     if sr is not None:
                         tensor = sr.upscale_tensor(tensor, out_h, out_w)
                     pending[next_src] = tensor
@@ -218,7 +223,7 @@ def _resume_key(input_path: str, info, plan, profile: Profile,
         "scale": plan.scale,
         "tile": plan.tile,
         "target_fps": plan.target_fps,
-        "encoder": profile.encoder,
+        "encoder": backend.effective_codec(profile.encoder),
         "crf": profile.crf,
         "out_w": out_w,
         "out_h": out_h,
@@ -258,7 +263,7 @@ def _encode_segment(slice_plans: list[FramePlan], offset: int, info, input_path:
     dec = Decoder(input_path, dec_w, dec_h, info.frame_count - src_start,
                   start_time=src_start / _src_fps(info))
     enc = Encoder(str(seg_path), out_w, out_h, enc_fps, "", None, None,
-                  crf=profile.crf, codec=profile.encoder)
+                  crf=profile.crf, codec=backend.effective_codec(profile.encoder))
     try:
         _process(slice_plans, dec, enc, sr, interp, out_h, out_w,
                  offset=offset, total=total, on_progress=on_progress)
@@ -286,7 +291,7 @@ def _concat(parts: pathlib.Path, n_seg: int, source: str, output: str, info) -> 
 def run(input_path: str, output_path: str, opts: Options, profile: Profile,
         models_dir: str = "models", on_progress=None, resume: bool = True) -> None:
     info = probe(input_path)
-    plan = decide(info, opts)
+    plan = decide(info, opts, backend.vram_gb())
     if plan.reject_reason:
         raise ValueError(plan.reject_reason)
 

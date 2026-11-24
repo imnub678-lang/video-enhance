@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import urllib.request
+from collections.abc import Callable
 
 BASE = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0"
 
@@ -45,7 +46,8 @@ def sha256(path: str | pathlib.Path) -> str:
     return h.hexdigest()
 
 
-def ensure_model(name: str, dest_dir: str | pathlib.Path = DEFAULT_DIR) -> str:
+def ensure_model(name: str, dest_dir: str | pathlib.Path = DEFAULT_DIR,
+                 on_progress: Callable[[int, int], None] | None = None) -> str:
     if name not in MODELS:
         raise KeyError(f"未知模型：{name}")
     url, expected, filename = MODELS[name]
@@ -59,8 +61,13 @@ def ensure_model(name: str, dest_dir: str | pathlib.Path = DEFAULT_DIR) -> str:
 
     tmp = target.with_suffix(target.suffix + ".part")
     with urllib.request.urlopen(url, timeout=60) as resp, open(tmp, "wb") as f:
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
         while chunk := resp.read(1 << 20):
             f.write(chunk)
+            done += len(chunk)
+            if on_progress:
+                on_progress(done, total)
 
     if url.endswith(".zip"):
         _extract_member(tmp, filename, target)

@@ -1,7 +1,7 @@
 import pytest
 
 from engine.probe import VideoInfo
-from engine.policy import Options, decide
+from engine.policy import Options, decide, tile_for_vram
 
 
 def mk(**kw) -> VideoInfo:
@@ -10,6 +10,20 @@ def mk(**kw) -> VideoInfo:
                 audio_codec="aac", subtitle_codecs=(), is_hdr=False, is_10bit=False)
     base.update(kw)
     return VideoInfo(**base)
+
+
+@pytest.mark.parametrize("vram, expected", [
+    (None, 768), (16.0, 768), (12.0, 768), (10.0, 512),
+    (8.0, 512), (6.0, 384), (4.0, 256),
+])
+def test_tile_scales_with_vram(vram, expected):
+    assert tile_for_vram(768, vram) == expected
+    assert tile_for_vram(384, vram) == min(384, expected)
+
+
+def test_decide_uses_vram_for_tile():
+    assert decide(mk(), Options(), vram=4.0).tile == 256
+    assert decide(mk(), Options(), vram=16.0).tile == 768
 
 
 def test_defaults_upscale_and_interpolate():
