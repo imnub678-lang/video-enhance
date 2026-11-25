@@ -1,54 +1,50 @@
-"""產生 GitHub Release 的 JSON body（避免 shell 反引號插值）。"""
+"""產生與 NVIDIA 安裝檔相符的 GitHub Release 說明。"""
+import hashlib
 import json
 from pathlib import Path
 
-NOTES = """本机影片画质增强工具，超分到 4K、补帧到 60/120fps，断点续传。
+VERSION = "1.5"
+STEM = f"VideoEnhance_NVIDIA_v{VERSION}_setup"
 
-## 适合谁
+NOTES = """適用於 Windows 10／11 64 位元與 NVIDIA 獨立顯卡。安裝檔包含 PyTorch、FFmpeg 與 ffprobe。第一次使用時，程式會下載並驗證模型。
 
-- Windows 10/11 64-bit
-- **NVIDIA 独立显卡**（AMD 版尚未发布；无独显无法使用）
-- 不需要管理员权限安装
+## 安裝
 
-## 下载与合并（重要）
+1. 將 `{stem}.part1` 和 `{stem}.part2` 下載到同一個資料夾。
+2. 在該資料夾開啟「命令提示字元」，執行：
 
-安装包 3.8 GB，超过 GitHub 单文件 2 GB 上限，拆成两卷。两个文件都要下载到**同一个资料夹**，然后合并：
+   ```bat
+   copy /B {stem}.part1+{stem}.part2 {stem}.exe
+   ```
 
-1. 下载 `VideoEnhance_NVIDIA_v1.0.0_setup.part1`（约 1.90 GB）
-2. 下载 `VideoEnhance_NVIDIA_v1.0.0_setup.part2`（约 1.81 GB）
-3. 在该资料夹打开命令提示字符，执行：
+3. 雙擊合併後的 `{stem}.exe`。
 
-    copy /B VideoEnhance_NVIDIA_v1.0.0_setup.part1+VideoEnhance_NVIDIA_v1.0.0_setup.part2 VideoEnhance_NVIDIA_v1.0.0_setup.exe
+合併後的安裝檔 SHA256：`{sha256}`
 
-4. 双击生成的 `VideoEnhance_NVIDIA_v1.0.0_setup.exe` 安装
+## 這版的變更
 
-合并后的 SHA256：21943690c27d533a9494d475833a315e0ef9cbe865fe904bc9aa15fcc5b03ec7
+- 預設輸出以 `_enhanced` 結尾，防止覆寫原始影片或同名成品。
+- 拖入影片時先讀取基本資訊，開始處理後才掃描影格一次。
+- 超分保留畫面比例與旋轉方向，補幀依實際時間戳處理可變幀率影片。
+- 修正無音軌字幕輸出、提早結束的解碼與分段續傳；硬體編碼器不適用時會回退到軟體編碼。
+- 處理日誌新增解碼、推論、影格複製、編碼與分段合併耗時。
 
-## 第一次启动
-
-1. 选输出资料夹（只问一次，之后记住）
-2. 扫描设备 → 列出六个模型让你确认 → 下载约 178 MB（需联网）
-3. 进主界面后把影片拖进去，选素材类型（实拍／动画）与画质，勾选超分／补帧，按开始
-
-## 说明
-
-- torch、ffmpeg 已打包进安装档，不用另外装 Python 或环境
-- 模型不在安装包内，首次启动才下载，来源为 GitHub / Hugging Face
-- 没有数位签章，SmartScreen 会警告「未知发行者」，选「其他资讯 → 仍要执行」
-- 移除安装不会删除已下载的模型（%LOCALAPPDATA%\\VideoEnhance\\models）
-
-源码与详细文件说明见仓库 README。
+已在 Windows／NVIDIA 環境通過 116 項測試與安裝、影片輸出、移除測試。只超分且未啟用補幀時，可變幀率素材仍會按平均幀率輸出。
 """
 
-BODY = {
-    "tag_name": "v1.0.0",
-    "name": "Video Enhance 1.0.0 (NVIDIA)",
-    "body": NOTES,
-    "draft": False,
-    "prerelease": False,
-}
 
 if __name__ == "__main__":
-    out = Path(__file__).resolve().parent / "release_body.json"
-    out.write_text(json.dumps(BODY, ensure_ascii=False), encoding="utf-8")
+    build = Path(__file__).resolve().parent
+    installer = build.parent / "dist" / "installers" / f"{STEM}.exe"
+    with installer.open("rb") as file:
+        digest = hashlib.file_digest(file, "sha256").hexdigest()
+    body = {
+        "tag_name": f"v{VERSION}",
+        "name": f"Video Enhance {VERSION} (NVIDIA)",
+        "body": NOTES.format(stem=STEM, sha256=digest),
+        "draft": True,
+        "prerelease": False,
+    }
+    out = build / "release_body.json"
+    out.write_text(json.dumps(body, ensure_ascii=False) + "\n", encoding="utf-8")
     print(out)

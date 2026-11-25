@@ -25,8 +25,7 @@ def test_manifest_survives_corruption(tmp_path):
     assert pipeline._load_done(tmp_path, {"crf": 19}) == set()
 
 
-def test_concat_list_uses_absolute_paths(tmp_path, monkeypatch):
-    """concat demuxer 相對清單檔解析，寫相對路徑會找不到片段。"""
+def test_concat_list_uses_segment_names_relative_to_the_list(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     parts = pathlib.Path("p")
     parts.mkdir()
@@ -40,8 +39,7 @@ def test_concat_list_uses_absolute_paths(tmp_path, monkeypatch):
     pipeline._concat(parts, 1, "src", "out",
                      SimpleNamespace(audio_codec=None, subtitle_codecs=()))
 
-    expected = (parts / "seg0000.mp4").resolve().as_posix()
-    assert f"file '{expected}'" in captured["text"]
+    assert captured["text"] == "file 'seg0000.mp4'\n"
 
 
 @pytest.mark.integration
@@ -89,6 +87,7 @@ def test_no_resume_reencodes_everything(make_clip, tmp_path, monkeypatch):
 
     pipeline.run(src, out, Options(do_sr=False), load("standard"), resume=False)
     assert not (tmp_path / ".o.parts").exists()
+    pathlib.Path(out).unlink()
 
     real = pipeline._encode_segment
     encoded: list[int] = []

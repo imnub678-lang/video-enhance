@@ -3,7 +3,7 @@
 ; The NVIDIA and AMD bundles must NOT share an install directory or AppId.
 
 #define MyAppName "Video Enhance (AMD Edition)"
-#define MyVersion "1.0.0"
+#define MyVersion "1.5"
 #define MyPublisher "VideoEnhance"
 #define MyAppId "{{4EDC1202-931A-4646-A848-064C114C1FE2}}"
 #define MyDirName "VideoEnhance AMD"
@@ -13,6 +13,8 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyVersion}
+VersionInfoVersion={#MyVersion}
+VersionInfoProductTextVersion={#MyVersion}
 AppPublisher={#MyPublisher}
 AppPublisherURL=https://github.com/xinntao/Real-ESRGAN
 DefaultDirName={userpf}\{#MyDirName}

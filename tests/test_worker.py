@@ -48,7 +48,7 @@ def test_end_to_end_sr_only(make_clip, tmp_path):
     run(src, out, Options(do_fi=False), load("fast"),
         on_progress=lambda **k: None)
     info = probe(out)
-    assert (info.width, info.height) == (3840, 2160)
+    assert (info.width, info.height) == (2880, 2160)
     assert info.fps == pytest.approx(60, abs=0.5)
     assert info.duration == pytest.approx(1.0, abs=0.2)
 

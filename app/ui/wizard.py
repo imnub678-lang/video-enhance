@@ -121,6 +121,7 @@ class SetupWizard(QDialog):
             (tr("wizard.scan.disk"),
              f"{self._info['disk_free_gb']} GB" if self._info.get("disk_free_gb") else tr("wizard.scan.not_found")),
             (tr("wizard.scan.ffmpeg"), pathlib.Path(self._info["ffmpeg"]).name),
+            ("ffprobe", pathlib.Path(self._info["ffprobe"]).name),
         ]
         for label, value in pairs:
             form.addRow(label, QLabel(value))
@@ -199,8 +200,14 @@ class SetupWizard(QDialog):
         self._next.setVisible(index < 2)
         if index == 0:
             supported = self._info["vendor"] in ("nvidia", "amd")
-            self._next.setEnabled(supported)
-            self._unsupported.setText("" if supported else tr("wizard.unsupported.body"))
+            tools_ok = self._info["media_tools_ok"]
+            self._next.setEnabled(supported and tools_ok)
+            messages = []
+            if not supported:
+                messages.append(tr("wizard.unsupported.body"))
+            if not tools_ok:
+                messages.append(tr("wizard.tools_missing"))
+            self._unsupported.setText("\n".join(messages))
             self._close.setText(tr("wizard.close"))
             if supported:
                 tile = tile_for_vram(768, self._info.get("vram_gb"))

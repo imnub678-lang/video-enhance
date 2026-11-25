@@ -95,3 +95,13 @@ def test_output_path_uses_dir_and_names(app):
     w.edit_title.setText("主題")
     w.edit_subtitle.setText("副題")
     assert w._output_path().endswith(r"D:\tmp\主題_副題.mp4")
+
+
+def test_output_uses_enhanced_suffix_when_names_are_unchanged(app, make_clip, tmp_path):
+    from pathlib import Path
+    from app.ui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_input_path(make_clip(name="input_clip.mp4"))
+    w.edit_outdir.setText(str(tmp_path))
+    assert Path(w._output_path()) == tmp_path / "input_clip_enhanced.mp4"

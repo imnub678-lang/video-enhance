@@ -14,22 +14,23 @@
 
 ### 一般使用者：安裝程式
 
-到 [Releases](../../releases) 下載 `VideoEnhance_NVIDIA_v1.0.0_setup`。安裝檔 3.8 GB，超過 GitHub 單檔案 2 GB 上限，拆成 `.part1` 與 `.part2` 兩卷。兩個檔案都下載到**同一個資料夾**後，在該資料夾執行：
+到 [v1.5 Release](../../releases/tag/v1.5) 下載 `VideoEnhance_NVIDIA_v1.5_setup`。安裝檔約 4 GB，已拆成 `.part1` 與 `.part2` 兩卷。兩個檔案都下載到**同一個資料夾**後，在該資料夾開啟「命令提示字元」並執行：
 
 ```bat
-copy /B VideoEnhance_NVIDIA_v1.0.0_setup.part1+VideoEnhance_NVIDIA_v1.0.0_setup.part2 VideoEnhance_NVIDIA_v1.0.0_setup.exe
+copy /B VideoEnhance_NVIDIA_v1.5_setup.part1+VideoEnhance_NVIDIA_v1.5_setup.part2 VideoEnhance_NVIDIA_v1.5_setup.exe
 ```
 
-再雙擊合併出的 exe 安裝。安裝不需要系統管理員權限，torch、ffmpeg 與所有依賴都已打包，不需另外安裝 Python 或環境。
+再雙擊合併出的 exe 安裝。安裝不需要系統管理員權限。安裝檔包含 torch、ffmpeg 和 ffprobe。校驗值見 Release 說明。
 
 ### 從原始碼執行
 
-需要先自行安裝 [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) 並加入 PATH（原始碼模式沒有打包 ffmpeg），接著：
+先安裝包含 `ffmpeg.exe` 和 `ffprobe.exe` 的 [FFmpeg](https://www.gyan.dev/ffmpeg/builds/) 並將兩者加入 PATH。先從 PyTorch 的 CUDA 13.0 套件來源安裝 torch，再安裝其餘相依套件：
 
 ```bat
 git clone https://github.com/imnub678-lang/video-enhance.git
 cd video-enhance
 py -3.13 -m venv .venv
+.venv\Scripts\python.exe -m pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.14.1+cu130
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe app\main.py
 ```
@@ -39,7 +40,7 @@ py -3.13 -m venv .venv
 ## 第一次啟動
 
 1. **選輸出資料夾**：只問一次，之後記在 QSettings
-2. **掃描裝置**：顯示顯卡、顯存、CPU 核心、記憶體、可用磁碟、ffmpeg 路徑
+2. **掃描裝置**：顯示顯卡、顯存、CPU 核心、記憶體、可用磁碟，並檢查 ffmpeg 和 ffprobe 能否執行
 3. **確認模型清單**：六個模型預設全勾（合計約 178 MB），可取消不需要的
 4. **下載模型**：逐項下載並做 SHA256 校驗
 
@@ -57,6 +58,8 @@ py -3.13 -m venv .venv
 6. 確認主題／副題（預設從檔名以 `_` 分割）與輸出目錄
 7. 按「開始」
 
+使用預設檔名時會輸出為 `原始檔名_enhanced.mp4`。如果輸出檔名已被使用，請另選檔名或資料夾。
+
 「素材 × 畫質」會自動對應到適合的模型，不需要選技術模型名稱：
 
 | 素材 | 畫質 | 模型 | 倍率 |
@@ -67,7 +70,7 @@ py -3.13 -m venv .venv
 | 動畫 | 快 | `realesr-animevideov3` | 4× |
 | 動畫 | 最佳 | `RealESRGAN_x4plus_anime_6B` | 4× |
 
-倍率是「模型倍率」，輸出目標一律 4K。`x2` 適合來源需要約 2 倍的情況（1080p→4K 剛好 2.00×，沒有多餘重採樣）；來源低於 540p 時 `x2` 不足，剩下靠插值會偏糊。
+倍率是「模型倍率」。成品保留原始畫面的顯示比例，橫式最多為 3840×2160，直式最多為 2160×3840。`x2` 適合來源需要約 2 倍的情況（16:9 的 1080p→4K 剛好 2.00×，沒有多餘重採樣）；來源低於 540p 時 `x2` 不足，剩下靠插值會偏糊。
 
 **重要**：`x2plus`／`x4plus` 是照片模型，用在動漫／插畫上會把線條抹平（實測銳度掉到通用模型的 50–70%）。動漫內容請選動畫；反之動畫模型用在實景素材上會有塑料感。
 
@@ -123,6 +126,8 @@ RTX 5070 Ti Laptop，TensorRT FP16。實測 9.62 秒 1440p60 素材：
 其他 1080p24 3 秒 → 4K60 端到端實測：`anime` 44 秒、`light` 46 秒、`x2plus` 76 秒、`anime-x4` 約 70 秒（首次含 TRT 編譯 113 秒）、`x4plus` 約 550 秒（推算）。
 
 解碼與編碼各跑獨立執行緒，但實測在 1080p→4K 這種 GPU 滿載的情境只快 4%；小素材（I/O 佔比高）可快 40%。
+
+成品完成後，日誌會列出掃描、載入模型、解碼、推論、影格轉換與複製、編碼、等待分段收尾及合併的計時。各階段可以重疊，因此階段耗時相加不等於總耗時。
 
 ## 支援與不支援
 
@@ -193,7 +198,7 @@ AMD 版需先在 ROCm 版 torch 環境下產出 `dist\VideoEnhance-AMD`，再執
 - 推論用 FP16，實測與 FP32 的像素差 0.04（滿分 255）
 - 管線全程走 GPU 張量，只在解碼後與編碼前各轉一次 numpy；早期版本每階段都轉，速度差 2.28 倍
 - **`tensor_to_frame` 必須用非就地的 `clamp`**：補幀時 `t=0` 的輸出幀就是 `pending` 裡的來源張量本身，`clamp_` 會把它從 0–1 汙染成 0–255，下一個插幀就把污染值餵進 RIFE。舊版因此讓每支補幀成品的**最後一幀變成純白**
-- **來源幀率不能用 `frame_count/duration` 推算**：容器時長常含音軌尾巴（實測 576 幀 / 9.6212 秒 = 59.868，實際 60.0）。這個誤差會讓原本落在整數位置的輸出幀得到 `t=0.998x`，每個原幀都白跑一次補幀網路（實測補幀次數 575 → 1150，全片慢 22%）。`_src_fps` 改用「時長與幀數是否相符」判斷 CFR，VFR 才回退到推算值
+- 拖入影片時只讀中繼資料。開始處理後，背景程序一次掃描視訊幀，取得幀數和實際時間戳，供補幀排程和分段定位使用。來源缺少可用時間戳時回退到幀率估算。
 - `schedule` 會把 `t` 在 1e-6 內吸附到精確的 0 或 1：`t=1` 等於下一對的 `t=0`，不吸附就會對原幀做無意義的插值
 - TRT 引擎用固定形狀編譯（SR 800×800 或 416×416 patch、RIFE 2176×3840），所以所有 tile 都補到同尺寸
 - `tiled_tensor` 必須顯式傳入 `scale`，否則會對 TRT 引擎做 8×8 探測而觸發 shape guard 錯誤

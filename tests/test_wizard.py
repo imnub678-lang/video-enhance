@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 INFO = {
@@ -10,6 +11,7 @@ INFO = {
     "hip": None, "gpu": "RTX 5070 Ti", "vram_gb": 12.0, "cpu_cores": 16,
     "ram_gb": 32.0, "disk_free_gb": 100.0, "trt": True,
     "ffmpeg": r"D:\ffmpeg\bin\ffmpeg.exe", "encoders": ["hevc_nvenc", "libx265"],
+    "ffprobe": r"D:\ffmpeg\bin\ffprobe.exe", "media_tools_ok": True,
 }
 
 
@@ -52,6 +54,21 @@ def test_scan_blocks_without_gpu(app, monkeypatch):
     w = _wizard(app, monkeypatch, info)
     assert not w._next.isEnabled()
     assert w._unsupported.text()
+
+
+def test_scan_blocks_when_media_tools_cannot_run(app, monkeypatch):
+    w = _wizard(app, monkeypatch, dict(INFO, media_tools_ok=False))
+    assert not w._next.isEnabled()
+    assert "ffprobe" in w._unsupported.text()
+
+
+def test_setup_completion_persists_when_registry_returns_text(tmp_path, monkeypatch):
+    from app.ui import config
+
+    settings = QSettings(str(tmp_path / "fresh.ini"), QSettings.IniFormat)
+    settings.setValue("setup_done", "true")
+    monkeypatch.setattr(config, "SETTINGS", settings)
+    assert config.setup_done()
 
 
 def test_all_models_checked_by_default(app, monkeypatch):

@@ -116,6 +116,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "zh_TW": "先選一段影片。",
         "zh_CN": "先选一段视频。",
         "en": "Pick a video first."},
+    "msg.output_exists.title": {
+        "zh_TW": "輸出檔已存在", "zh_CN": "输出文件已存在", "en": "Output file already exists"},
+    "msg.output_exists.body": {
+        "zh_TW": "請更改輸出檔名或資料夾。\n{path}",
+        "zh_CN": "请更改输出文件名或文件夹。\n{path}",
+        "en": "Choose a different output name or folder.\n{path}"},
     "dlg.pick_video": {
         "zh_TW": "選擇影片", "zh_CN": "选择视频", "en": "Choose video"},
     "dlg.pick_outdir": {
@@ -160,6 +166,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "zh_TW": "依顯存自動選用分塊大小：{tile} px",
         "zh_CN": "依显存自动选用分块大小：{tile} px",
         "en": "Tile size picked from video memory: {tile} px"},
+    "wizard.tools_missing": {
+        "zh_TW": "無法執行 ffmpeg 或 ffprobe，請重新安裝程式，或將兩者加入 PATH。",
+        "zh_CN": "无法运行 ffmpeg 或 ffprobe，请重新安装程序，或将两者加入 PATH。",
+        "en": "Could not run ffmpeg or ffprobe. Reinstall the app or add both tools to PATH."},
     "wizard.unsupported.title": {
         "zh_TW": "需要獨立顯卡", "zh_CN": "需要独立显卡", "en": "A dedicated GPU is required"},
     "wizard.unsupported.body": {

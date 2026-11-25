@@ -14,7 +14,6 @@ import sys
 
 import torch
 
-LEGACY_FFMPEG = pathlib.Path(r"D:\ffmpeg\bin\ffmpeg.exe")
 NO_WINDOW = subprocess.CREATE_NO_WINDOW
 
 
@@ -24,23 +23,34 @@ def _exe_dir() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parents[1]
 
 
-def resolve_ffmpeg() -> str:
-    """依序找：環境變數 → 程式自帶 tools/ffmpeg.exe → PATH → 舊版寫死路徑。"""
-    override = os.environ.get("VIDEOTOOL_FFMPEG")
+def _resolve_media_tool(name: str) -> str:
+    override = os.environ.get(f"VIDEOTOOL_{name.upper()}")
     if override and pathlib.Path(override).exists():
         return override
 
     base = _exe_dir()
-    for candidate in (base / "tools" / "ffmpeg.exe", base / "_internal" / "tools" / "ffmpeg.exe"):
+    exe = f"{name}.exe"
+    for candidate in (base / "tools" / exe, base / "_internal" / "tools" / exe):
         if candidate.exists():
             return str(candidate)
 
-    found = shutil.which("ffmpeg")
-    if found:
-        return found
-    if LEGACY_FFMPEG.exists():
-        return str(LEGACY_FFMPEG)
-    return "ffmpeg"
+    return shutil.which(name) or name
+
+
+def resolve_ffmpeg() -> str:
+    return _resolve_media_tool("ffmpeg")
+
+
+def resolve_ffprobe() -> str:
+    return _resolve_media_tool("ffprobe")
+
+
+def _tool_works(path: str) -> bool:
+    try:
+        return subprocess.run([path, "-version"], capture_output=True,
+                              creationflags=NO_WINDOW, timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 @functools.lru_cache(maxsize=1)
@@ -109,24 +119,31 @@ def ffmpeg_encoders() -> frozenset[str]:
     return frozenset(names)
 
 
-def effective_codec(preferred: str) -> str:
-    """把「想要的編碼器」換成這台機器真的能用的。
+@functools.lru_cache(maxsize=16)
+def _hardware_encoder_works(codec: str, width: int, height: int) -> bool:
+    try:
+        result = subprocess.run([resolve_ffmpeg(), "-v", "error", "-f", "lavfi",
+                                 "-i", f"color=size={width}x{height}:rate=1", "-frames:v", "1",
+                                 "-c:v", codec, "-pix_fmt", "yuv420p10le", "-f", "null", "-"],
+                                capture_output=True, creationflags=NO_WINDOW, timeout=15)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
-    注意：ffmpeg -encoders 列出的是「編譯進去的」，不是「硬體支援的」，
-    NVIDIA 機器同樣會列出 hevc_amf。所以必須先看廠商，再看可用性。
-    """
+
+def effective_codec(preferred: str, width: int, height: int) -> str:
+    """選擇 FFmpeg 與輸出尺寸都支援的 10-bit 編碼器。"""
     chain = {
         "nvidia": ("hevc_nvenc", "libx265"),
         "amd": ("hevc_amf", "libx265"),
         "cpu": ("libx265",),
     }[vendor()]
-    if preferred in chain:
-        return preferred
     available = ffmpeg_encoders()
-    for codec in chain:
-        if not available or codec in available:
+    ordered = (preferred, *(codec for codec in chain if codec != preferred)) if preferred in chain else chain
+    for codec in ordered:
+        if codec in available and (codec == "libx265" or _hardware_encoder_works(codec, width, height)):
             return codec
-    return "libx265"
+    raise RuntimeError("無法使用 HEVC 編碼器，請使用提供 libx265 的 FFmpeg。")
 
 
 def describe() -> dict:
@@ -170,6 +187,8 @@ def describe() -> dict:
         "disk_free_gb": disk_free_gb,
         "trt": has_trt(),
         "ffmpeg": resolve_ffmpeg(),
+        "ffprobe": resolve_ffprobe(),
+        "media_tools_ok": all(_tool_works(path) for path in (resolve_ffmpeg(), resolve_ffprobe())),
         "encoders": sorted(ffmpeg_encoders()),
     }
     if device() == "cuda" and torch.cuda.is_available():

@@ -34,7 +34,8 @@ def models_dir() -> str:
 
 
 def setup_done() -> bool:
-    return SETTINGS.value("setup_done", False) is True
+    # 登錄沒有型別資訊，QSettings 讀回的是字串 "true"，不能拿 is True 比。
+    return str(SETTINGS.value("setup_done", False)).lower() == "true"
 
 
 def mark_setup_done() -> None:

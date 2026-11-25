@@ -20,11 +20,12 @@ class Decoder:
         self.height = height
         self.frame_count = frame_count
         self._frame_bytes = width * height * 3
-        cmd = [FFMPEG, "-v", "error"]
+        cmd = [FFMPEG, "-v", "error", "-xerror"]
         if start_time > 0:
             cmd += ["-ss", f"{start_time:.6f}"]
         cmd += [
             "-i", path,
+            "-map", "0:V:0", "-fps_mode", "passthrough",
             "-vf", f"scale={width}:{height}:flags=bicubic",
             "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
         ]
@@ -54,7 +55,7 @@ class Decoder:
 
 
 class Encoder:
-    def __init__(self, path: str, width: int, height: int, fps: int, source: str,
+    def __init__(self, path: str, width: int, height: int, fps: float, source: str,
                  audio_codec: str | None, subtitle_codec: str | None,
                  crf: int = 19, codec: str = "hevc_nvenc"):
         self.width = width
@@ -66,7 +67,7 @@ class Encoder:
             "-f", "rawvideo", "-pix_fmt", "bgr24",
             "-s", f"{width}x{height}", "-r", str(fps), "-i", "-",
         ]
-        if audio_codec is not None:
+        if audio_codec is not None or subtitle_codec == "mov_text":
             cmd += ["-i", source]
         cmd += ["-map", "0:v:0"]
         if audio_codec is not None:
@@ -112,16 +113,16 @@ class Encoder:
 
 
 def concat_segments(list_path: str, source: str, output: str,
-                    audio_codec: str | None, subtitle_codec: str | None) -> None:
+                    audio_codec: str | None, subtitle_codec: str | None, subtitle_index: int = 0) -> None:
     """把分段檔串成成品，並從原始素材掛回音軌與內封字幕。"""
     cmd = [FFMPEG, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", list_path]
-    if audio_codec is not None:
+    if audio_codec is not None or subtitle_codec == "mov_text":
         cmd += ["-i", source]
     cmd += ["-map", "0:v:0"]
     if audio_codec is not None:
         cmd += ["-map", "1:a:0?"]
     if subtitle_codec == "mov_text":
-        cmd += ["-map", "1:s:0?", "-c:s", "copy"]
+        cmd += ["-map", f"1:s:{subtitle_index}?", "-c:s", "copy"]
     cmd += ["-c:v", "copy"]
     if audio_codec is not None:
         if audio_codec in COPYABLE_AUDIO:

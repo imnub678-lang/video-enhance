@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from engine.encoders import all_profiles
+from engine.output import check_output
 from engine.policy import qualities_for, resolve_model
 from engine.progress import parse
 from engine.probe import probe
@@ -279,7 +280,7 @@ class MainWindow(GlassWindow):
         self.edit_title.setText(title)
         self.edit_subtitle.setText(subtitle)
         try:
-            info = probe(path)
+            info = probe(path, include_frames=False)
             self._info = info
             self.drop_label.setText(tr(
                 "drop.loaded", name=pathlib.Path(path).name, width=info.width,
@@ -363,6 +364,8 @@ class MainWindow(GlassWindow):
         title = self.edit_title.text().strip() or "output"
         subtitle = self.edit_subtitle.text().strip()
         name = f"{title}_{subtitle}" if subtitle else title
+        if self._input and name.casefold() == pathlib.Path(self._input).stem.casefold():
+            name += "_enhanced"
         return str(pathlib.Path(self.edit_outdir.text()) / f"{name}.mp4")
 
     def _start(self) -> None:
@@ -370,6 +373,11 @@ class MainWindow(GlassWindow):
             QMessageBox.warning(self, tr("msg.no_input.title"), tr("msg.no_input.body"))
             return
         out = self._output_path()
+        try:
+            check_output(self._input, out)
+        except OSError:
+            QMessageBox.warning(self, tr("msg.output_exists.title"), tr("msg.output_exists.body", path=out))
+            return
         self._remember_output_dir()
         if getattr(sys, "frozen", False):
             cmd = [sys.executable, "--worker"]
@@ -391,6 +399,7 @@ class MainWindow(GlassWindow):
         self._proc.readyReadStandardError.connect(self._read_stderr)
         self._proc.finished.connect(self._finished)
         self._started_at = time.time()
+        self._active_output = out
         self.progress.setValue(0)
         self.pct_label.setText("0%")
         self.status.setText(tr("status.starting"))
@@ -428,7 +437,7 @@ class MainWindow(GlassWindow):
             self.pct_label.setText("100%")
             elapsed = time.time() - self._started_at
             self.status.setText(tr("status.done", seconds=elapsed))
-            self._append(tr("log.output", path=self._output_path()))
+            self._append(tr("log.output", path=self._active_output))
         elif code == 3:
             self.status.setText(tr("status.rejected"))
         else:

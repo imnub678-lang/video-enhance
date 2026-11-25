@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 from engine.probe import VideoInfo
 
@@ -90,9 +91,10 @@ def decide(info: VideoInfo, opts: Options, vram: float | None = None) -> Plan:
     if opts.do_sr and info.width * info.height >= TARGET_W * TARGET_H:
         return _reject("解析度已達 4K，超分無意義；可取消勾選超分")
 
-    # 來源已達目標幀率時，補幀無意義，略過（由呼叫端記錄提示）。
+    # 高平均幀率的 VFR 素材仍可能含有需要補幀的間隔。允許少量時間戳捨入誤差。
+    has_gaps = opts.do_fi and any(b - a > 1.05 / opts.target_fps for a, b in pairwise(info.frame_times))
     do_sr = opts.do_sr
-    do_fi = opts.do_fi and opts.target_fps > round(info.fps)
+    do_fi = opts.do_fi and (opts.target_fps > round(info.fps) or has_gaps)
 
     if not do_sr and not do_fi:
         return _reject(

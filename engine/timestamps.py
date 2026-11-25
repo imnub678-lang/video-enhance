@@ -1,6 +1,7 @@
 """輸出幀排程：以時間戳而非幀序號決定每個輸出幀從哪兩張來源幀插值。"""
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 
 
@@ -40,4 +41,17 @@ def schedule(n_src: int, src_fps: float, target_fps: int) -> list[FramePlan]:
             b = n_src - 1
             t = 0.0 if b == a else t
         plans.append(FramePlan(out_index=i, src_a=a, src_b=b, t=t))
+    return plans
+
+
+def schedule_timestamps(times: tuple[float, ...], duration: float, target_fps: int) -> list[FramePlan]:
+    plans = []
+    for i in range(max(1, round(duration * target_fps))):
+        when = i / target_fps
+        a = bisect_right(times, when + 1e-6) - 1
+        if a == len(times) - 1 or when <= times[a] + 1e-6:
+            plans.append(FramePlan(i, a, a, 0.0))
+        else:
+            t = (when - times[a]) / (times[a + 1] - times[a])
+            plans.append(FramePlan(i, a, a + 1, t))
     return plans

@@ -2,7 +2,7 @@
 ; Build order: pyinstaller video_enhance.spec, then ISCC setup_nvidia.iss
 
 #define MyAppName "Video Enhance (NVIDIA Edition)"
-#define MyVersion "1.0.0"
+#define MyVersion "1.5"
 #define MyPublisher "VideoEnhance"
 #define MyAppId "{{14462F19-9685-4C58-85DB-89EF9F872516}}"
 #define MyDirName "VideoEnhance NVIDIA"
@@ -12,6 +12,8 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyVersion}
+VersionInfoVersion={#MyVersion}
+VersionInfoProductTextVersion={#MyVersion}
 AppPublisher={#MyPublisher}
 AppPublisherURL=https://github.com/xinntao/Real-ESRGAN
 DefaultDirName={userpf}\{#MyDirName}

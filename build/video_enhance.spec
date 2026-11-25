@@ -4,6 +4,8 @@
 AMD 版需先在 ROCm 版 torch 環境下執行；本機是 CUDA 版，只能產出 NVIDIA 版。
 """
 import pathlib
+import os
+import shutil
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -12,8 +14,12 @@ ROOT = pathlib.Path(SPECPATH).resolve().parent  # noqa: F821  (PyInstaller 注�
 datas = [
     (str(ROOT / "app" / "ui" / "assets"), "app/ui/assets"),
     (str(ROOT / "encoders"), "encoders"),
-    (r"D:\ffmpeg\bin\ffmpeg.exe", "tools"),
 ]
+for name in ("ffmpeg", "ffprobe"):
+    executable = os.environ.get(f"VIDEOTOOL_{name.upper()}") or shutil.which(name)
+    if not executable or not pathlib.Path(executable).is_file():
+        raise SystemExit(f"Cannot build: install {name}.exe and add it to PATH.")
+    datas.append((executable, f"tools"))
 
 a = Analysis(
     [str(ROOT / "app" / "main.py")],
